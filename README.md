@@ -58,5 +58,15 @@ Here's a simple "Hello, World!" example in Mojo.
     Hello, Mojo!
     ```
 
+## Linting and Formatting
+This project uses `mojo format` to ensure consistent code style. A pre-commit hook is set up to automatically format your staged `.mojo` files before you commit.
+
+To enable the pre-commit hook, run the following command from the root of the project:
+```bash
+ln -s ../../lint.sh .git/hooks/pre-commit
+```
+
+Now, every time you commit a `.mojo` file, it will be automatically formatted according to the project's style.
+
 ## Development
 (Add more sections for development guidelines, testing, contributing, etc., as the project evolves.)
