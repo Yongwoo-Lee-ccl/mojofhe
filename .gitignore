@@ -1,0 +1,20 @@
+# Python
+.python-version
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+
+# Mojo
+*.mojop
+
+# Editors
+.DS_Store
+*~
+.idea/
+.vscode/
+
+# Environment variables
+.env
