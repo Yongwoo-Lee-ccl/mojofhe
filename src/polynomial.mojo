@@ -191,3 +191,8 @@ struct Polynomial(Movable):
                 else:
                     self.set_coefficient(random_index, 1)
                 current_weight += 1
+
+    fn sample_uniform(mut self):
+        for coefficient_index in range(self.total_length):
+            var random_value = Int(random_si64(0, self.q_modulus - 1))
+            self.set_coefficient(coefficient_index, random_value)

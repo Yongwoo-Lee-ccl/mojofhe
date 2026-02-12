@@ -69,5 +69,23 @@ fn test_sample_sparse() raises:
     )
 
 
+fn test_sample_uniform() raises:
+    print("Running test_sample_uniform...")
+    var n_dim = 4
+    var p_dim = 9
+    var target_bits = 20
+    var q_modulus = find_suitable_q(n_dim, p_dim, target_bits)
+
+    var poly = Polynomial(n_dim, p_dim, q_modulus)
+    poly.sample_uniform()
+
+    for i in range(poly.total_length):
+        var val = Int(poly.coefficient_values[i])
+        assert_true(
+            val >= 0 and val < q_modulus,
+            "Uniform sample should be within [0, q-1]",
+        )
+
+
 fn main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
