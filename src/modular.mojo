@@ -31,6 +31,70 @@ fn multiply_mod_barrett(
     return Int(reduced_value)
 
 
+fn compute_montgomery_neg_inv(modulus_value: Int) -> Int64:
+    # Compute -q^{-1} mod 2^32 using Newton iteration in the 32-bit ring.
+    var lower_word_mask = (Int64(1) << 32) - 1
+    var inverse_estimate: Int64 = 1
+    var modulus_word = Int64(modulus_value) & lower_word_mask
+    for iteration_index in range(6):
+        _ = iteration_index
+        inverse_estimate = (
+            inverse_estimate * (2 - modulus_word * inverse_estimate)
+        ) & lower_word_mask
+    return (-inverse_estimate) & lower_word_mask
+
+
+fn compute_montgomery_r2(modulus_value: Int) -> Int:
+    var r_mod_q = Int((Int64(1) << 32) % Int64(modulus_value))
+    var barrett_ratio = compute_barrett_ratio(modulus_value)
+    return multiply_mod_barrett(r_mod_q, r_mod_q, modulus_value, barrett_ratio)
+
+
+fn _montgomery_reduce(
+    wide_value: Int64, modulus_value: Int, montgomery_neg_inv: Int64
+) -> Int:
+    var lower_word_mask = (Int64(1) << 32) - 1
+    var correction_factor = (
+        (wide_value & lower_word_mask) * montgomery_neg_inv
+    ) & lower_word_mask
+    var reduced_value = (
+        wide_value + correction_factor * Int64(modulus_value)
+    ) >> 32
+    if reduced_value >= Int64(modulus_value):
+        reduced_value -= Int64(modulus_value)
+    if reduced_value < 0:
+        reduced_value += Int64(modulus_value)
+    return Int(reduced_value)
+
+
+fn multiply_mod_montgomery(
+    left_value: Int,
+    right_value: Int,
+    modulus_value: Int,
+    montgomery_neg_inv: Int64,
+    montgomery_r2: Int,
+) -> Int:
+    # Convert to Montgomery domain, multiply, then convert back.
+    var left_montgomery = _montgomery_reduce(
+        Int64(left_value) * Int64(montgomery_r2),
+        modulus_value,
+        montgomery_neg_inv,
+    )
+    var right_montgomery = _montgomery_reduce(
+        Int64(right_value) * Int64(montgomery_r2),
+        modulus_value,
+        montgomery_neg_inv,
+    )
+    var product_montgomery = _montgomery_reduce(
+        Int64(left_montgomery) * Int64(right_montgomery),
+        modulus_value,
+        montgomery_neg_inv,
+    )
+    return _montgomery_reduce(
+        Int64(product_montgomery), modulus_value, montgomery_neg_inv
+    )
+
+
 fn find_suitable_q(n_dim: Int, p_dim: Int, target_bit_length: Int) -> Int:
     """
     Finds a prime q such that q = 1 mod (4 * n_dim * p_dim) and q has
