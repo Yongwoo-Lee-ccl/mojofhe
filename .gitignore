@@ -1,3 +1,5 @@
+modular_install.sh
+setup.deb.sh
 # Python
 .python-version
 __pycache__/
