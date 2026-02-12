@@ -15,7 +15,7 @@ echo "Running all tests in the 'test' folder..."
 for test_file in test/*; do
     if [ -f "$test_file" ]; then
         echo "Running $test_file..."
-        mojo "$test_file"
+        mojo run -I . "$test_file"
     fi
 done
 

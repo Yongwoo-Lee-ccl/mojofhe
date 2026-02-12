@@ -12,7 +12,7 @@ This is especially important before creating a pull request.
 ## 2. Testing
 Always run the tests and verify that all tests pass before creating a pull request.
 ```bash
-# (Add your test command here)
+./run_tests.sh
 ```
 
 ## 3. New Features
