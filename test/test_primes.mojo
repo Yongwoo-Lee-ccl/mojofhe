@@ -1,5 +1,5 @@
 from testing import assert_true, assert_false, TestSuite
-from src.primes import is_prime
+from src.arithmetic import is_prime
 
 
 def test_is_prime():

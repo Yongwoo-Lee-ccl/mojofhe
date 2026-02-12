@@ -2,6 +2,9 @@ from math import sqrt
 
 
 fn is_prime(num: Int) -> Bool:
+    """
+    Checks if a number is prime.
+    """
     if num <= 1:
         return False
     if num == 2:
