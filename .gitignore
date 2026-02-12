@@ -18,3 +18,7 @@ venv/
 
 # Environment variables
 .env
+
+# Installation artifacts
+modular_install.sh
+setup.deb.sh
