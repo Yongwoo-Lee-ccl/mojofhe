@@ -5,9 +5,36 @@ fn mod_pow(base_value: Int, exponent_value: Int, modulus_value: Int) -> Int:
     return power_modular(base_value, exponent_value, modulus_value)
 
 
+fn compute_barrett_ratio(modulus_value: Int) -> Int64:
+    # k = 31 for q < 2^30. Ratio uses floor(2^(2k) / q).
+    return (Int64(1) << 62) // Int64(modulus_value)
+
+
+fn multiply_mod_barrett(
+    left_value: Int,
+    right_value: Int,
+    modulus_value: Int,
+    barrett_ratio: Int64,
+) -> Int:
+    # Barrett reduction specialized for int32-lane friendly moduli.
+    var wide_product = Int64(left_value) * Int64(right_value)
+    var q1_estimate = wide_product >> 30
+    var q2_estimate = q1_estimate * barrett_ratio
+    var q3_estimate = q2_estimate >> 32
+    var reduced_value = wide_product - q3_estimate * Int64(modulus_value)
+
+    while reduced_value >= Int64(modulus_value):
+        reduced_value -= Int64(modulus_value)
+    while reduced_value < 0:
+        reduced_value += Int64(modulus_value)
+
+    return Int(reduced_value)
+
+
 fn find_suitable_q(n_dim: Int, p_dim: Int, target_bit_length: Int) -> Int:
     """
-    Finds a prime q such that q = 1 mod (4 * n_dim * p_dim) and q has roughly target_bit_length bits.
+    Finds a prime q such that q = 1 mod (4 * n_dim * p_dim) and q has
+    roughly target_bit_length bits.
     """
     var target_magnitude = 1 << target_bit_length
     var cyclic_order = 4 * n_dim * p_dim
@@ -49,7 +76,8 @@ fn find_primitive_root(modulus_value: Int, order_value: Int) -> Int:
             var is_actually_primitive = True
 
             # Check prime factors of order_value to ensure it's primitive
-            # We assume order_value consists of factors 2, 3, 5 based on problem constraints
+            # We assume order_value consists of factors 2, 3, 5 based on
+            # problem constraints
             if order_value % 2 == 0:
                 if (
                     mod_pow(root_candidate, order_value // 2, modulus_value)
