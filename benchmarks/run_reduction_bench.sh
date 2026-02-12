@@ -8,7 +8,7 @@ if [ -z "$VIRTUAL_ENV" ]; then
     exit 1
 fi
 
-echo "Benchmarking NTT reduction modes (n=2^7, p=3^5)"
+echo "Benchmarking NTT reduction modes (n=2^7, p=3^4)"
 for run_index in 1 2 3; do
     echo "barrett run $run_index"
     /usr/bin/time -f "elapsed %e s" \

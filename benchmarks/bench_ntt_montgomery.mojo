@@ -20,7 +20,7 @@ fn _copy_values(source_values: List[Int32]) -> List[Int32]:
 
 fn main() raises:
     var n_power_of_2 = 1 << 7
-    var p_power_of_3 = 243  # 3^5
+    var p_power_of_3 = 81  # 3^4
     var target_bits = 25
     var q_modulus = find_suitable_q(n_power_of_2, p_power_of_3, target_bits)
 

@@ -9,7 +9,7 @@ fn test_barrett_and_montgomery_match_on_ntt_workload() raises:
     print("Running test_barrett_and_montgomery_match_on_ntt_workload...")
 
     var n_power_of_2 = 1 << 7
-    var p_power_of_3 = 243  # 3^5
+    var p_power_of_3 = 81  # 3^4
     var target_bits = 25
     var q_modulus = find_suitable_q(n_power_of_2, p_power_of_3, target_bits)
 

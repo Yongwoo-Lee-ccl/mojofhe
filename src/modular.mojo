@@ -67,6 +67,46 @@ fn _montgomery_reduce(
     return Int(reduced_value)
 
 
+fn montgomery_multiply_raw(
+    left_value: Int,
+    right_value: Int,
+    modulus_value: Int,
+    montgomery_neg_inv: Int64,
+) -> Int:
+    return _montgomery_reduce(
+        Int64(left_value) * Int64(right_value),
+        modulus_value,
+        montgomery_neg_inv,
+    )
+
+
+fn to_montgomery_domain(
+    value: Int,
+    modulus_value: Int,
+    montgomery_neg_inv: Int64,
+    montgomery_r2: Int,
+) -> Int:
+    return montgomery_multiply_raw(
+        value, montgomery_r2, modulus_value, montgomery_neg_inv
+    )
+
+
+fn multiply_mod_montgomery_with_rhs_mont(
+    left_value: Int,
+    right_value_montgomery: Int,
+    modulus_value: Int,
+    montgomery_neg_inv: Int64,
+) -> Int:
+    # If right operand is in Montgomery domain, output keeps left domain:
+    # normal x mont -> normal, mont x mont -> mont.
+    return montgomery_multiply_raw(
+        left_value,
+        right_value_montgomery,
+        modulus_value,
+        montgomery_neg_inv,
+    )
+
+
 fn multiply_mod_montgomery(
     left_value: Int,
     right_value: Int,
@@ -74,19 +114,16 @@ fn multiply_mod_montgomery(
     montgomery_neg_inv: Int64,
     montgomery_r2: Int,
 ) -> Int:
-    # Convert to Montgomery domain, multiply, then convert back.
-    var left_montgomery = _montgomery_reduce(
-        Int64(left_value) * Int64(montgomery_r2),
-        modulus_value,
-        montgomery_neg_inv,
+    # Convert both operands to Montgomery domain and reduce back to normal.
+    var left_montgomery = to_montgomery_domain(
+        left_value, modulus_value, montgomery_neg_inv, montgomery_r2
     )
-    var right_montgomery = _montgomery_reduce(
-        Int64(right_value) * Int64(montgomery_r2),
-        modulus_value,
-        montgomery_neg_inv,
+    var right_montgomery = to_montgomery_domain(
+        right_value, modulus_value, montgomery_neg_inv, montgomery_r2
     )
-    var product_montgomery = _montgomery_reduce(
-        Int64(left_montgomery) * Int64(right_montgomery),
+    var product_montgomery = montgomery_multiply_raw(
+        left_montgomery,
+        right_montgomery,
         modulus_value,
         montgomery_neg_inv,
     )

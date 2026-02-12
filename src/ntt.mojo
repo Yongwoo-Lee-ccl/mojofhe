@@ -6,7 +6,8 @@ from src.modular import (
     multiply_mod_barrett,
     compute_montgomery_neg_inv,
     compute_montgomery_r2,
-    multiply_mod_montgomery,
+    to_montgomery_domain,
+    multiply_mod_montgomery_with_rhs_mont,
 )
 
 
@@ -19,13 +20,13 @@ fn _multiply_modulo_int32(
     montgomery_neg_inv: Int64,
     montgomery_r2: Int,
 ) -> Int:
+    _ = montgomery_r2
     if use_montgomery:
-        return multiply_mod_montgomery(
+        return multiply_mod_montgomery_with_rhs_mont(
             left_value,
             right_value,
             modulus_int,
             montgomery_neg_inv,
-            montgomery_r2,
         )
     return multiply_mod_barrett(
         left_value, right_value, modulus_int, barrett_ratio
@@ -43,16 +44,23 @@ fn apply_i_axis_transform(
     var barrett_ratio = compute_barrett_ratio(modulus_int)
     var montgomery_neg_inv: Int64 = 0
     var montgomery_r2: Int = 0
+    var root_multiplier = Int(root_imaginary_unit)
     if use_montgomery:
         montgomery_neg_inv = compute_montgomery_neg_inv(modulus_int)
         montgomery_r2 = compute_montgomery_r2(modulus_int)
+        root_multiplier = to_montgomery_domain(
+            root_multiplier,
+            modulus_int,
+            montgomery_neg_inv,
+            montgomery_r2,
+        )
     var half_stride = total_length // 2
     for offset_index in range(half_stride):
         var real_part = Int(coefficient_values[offset_index])
         var imag_part = Int(coefficient_values[offset_index + half_stride])
         var weighted_imag = _multiply_modulo_int32(
             imag_part,
-            Int(root_imaginary_unit),
+            root_multiplier,
             modulus_int,
             barrett_ratio,
             use_montgomery,
@@ -86,10 +94,24 @@ fn apply_radix2_dif_ntt(
     var root_int = Int(root_of_unity)
     var current_step_size = transform_length
     var stage_twiddle = root_int
+    var montgomery_one = 1
+    if use_montgomery:
+        montgomery_one = to_montgomery_domain(
+            1,
+            modulus_int,
+            montgomery_neg_inv,
+            montgomery_r2,
+        )
+        stage_twiddle = to_montgomery_domain(
+            root_int,
+            modulus_int,
+            montgomery_neg_inv,
+            montgomery_r2,
+        )
     while current_step_size > 1:
         var half_step = current_step_size // 2
         for group_start in range(0, transform_length, current_step_size):
-            var current_twiddle = 1
+            var current_twiddle = montgomery_one
             for butterfly_index in range(half_step):
                 var upper_index_base = (
                     base_offset + (group_start + butterfly_index) * block_size
@@ -164,6 +186,26 @@ fn apply_radix3_dif_ntt(
     var root_int = Int(root_of_unity)
     var current_step_size = transform_length
     var root_order_3 = mod_pow(root_int, transform_length // 3, modulus_int)
+    var montgomery_one = 1
+    if use_montgomery:
+        montgomery_one = to_montgomery_domain(
+            1,
+            modulus_int,
+            montgomery_neg_inv,
+            montgomery_r2,
+        )
+        root_int = to_montgomery_domain(
+            root_int,
+            modulus_int,
+            montgomery_neg_inv,
+            montgomery_r2,
+        )
+        root_order_3 = to_montgomery_domain(
+            root_order_3,
+            modulus_int,
+            montgomery_neg_inv,
+            montgomery_r2,
+        )
     var root_order_3_sq = _multiply_modulo_int32(
         root_order_3,
         root_order_3,
@@ -177,7 +219,7 @@ fn apply_radix3_dif_ntt(
     while current_step_size >= 3:
         var third_step = current_step_size // 3
         for group_start in range(0, transform_length, current_step_size):
-            var twiddle_1 = 1
+            var twiddle_1 = montgomery_one
             for butterfly_index in range(third_step):
                 var twiddle_2 = _multiply_modulo_int32(
                     twiddle_1,
@@ -332,8 +374,29 @@ fn apply_cyclotomic_pruned_ntt(
     if use_montgomery:
         montgomery_neg_inv = compute_montgomery_neg_inv(modulus_int)
         montgomery_r2 = compute_montgomery_r2(modulus_int)
-    var root_int = Int(root_of_unity)
-    var root_order_3 = mod_pow(root_int, m_parameter, modulus_int)
+    var root_int_standard = Int(root_of_unity)
+    var root_int = root_int_standard
+    var root_order_3 = mod_pow(root_int_standard, m_parameter, modulus_int)
+    var montgomery_one = 1
+    if use_montgomery:
+        montgomery_one = to_montgomery_domain(
+            1,
+            modulus_int,
+            montgomery_neg_inv,
+            montgomery_r2,
+        )
+        root_int = to_montgomery_domain(
+            root_int,
+            modulus_int,
+            montgomery_neg_inv,
+            montgomery_r2,
+        )
+        root_order_3 = to_montgomery_domain(
+            root_order_3,
+            modulus_int,
+            montgomery_neg_inv,
+            montgomery_r2,
+        )
     var root_order_3_sq = _multiply_modulo_int32(
         root_order_3,
         root_order_3,
@@ -343,7 +406,7 @@ fn apply_cyclotomic_pruned_ntt(
         montgomery_neg_inv,
         montgomery_r2,
     )
-    var current_twiddle = 1
+    var current_twiddle = montgomery_one
     for offset_index in range(m_parameter):
         var twiddle_sq = _multiply_modulo_int32(
             current_twiddle,
@@ -417,7 +480,7 @@ fn apply_cyclotomic_pruned_ntt(
             montgomery_r2,
         )
 
-    var root_for_m = Int32(mod_pow(root_int, 3, modulus_int))
+    var root_for_m = Int32(mod_pow(root_int_standard, 3, modulus_int))
     apply_radix3_dif_ntt(
         coefficient_values,
         m_parameter,
