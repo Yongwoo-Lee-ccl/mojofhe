@@ -9,6 +9,8 @@ Always run the linter before committing your changes. This is enforced by a pre-
 ```
 This is especially important before creating a pull request.
 
+The maximum line length is 80 characters (ruler length: 80). Ensure your code adheres to this limit for better readability.
+
 ## 2. Testing
 Always run the tests and verify that all tests pass before creating a pull request.
 ```bash
