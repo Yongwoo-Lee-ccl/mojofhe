@@ -1,4 +1,5 @@
 from collections import List
+from random import random_si64
 from src.modular import find_primitive_root, mod_pow
 from src.ntt import (
     apply_i_axis_transform,
@@ -9,7 +10,8 @@ from src.ntt import (
 
 struct Polynomial(Movable):
     # Coefficients are stored as Int32 lanes for SIMD/GPU-friendly arithmetic.
-    # We assume q_modulus < 2^30 so adds/subs and twiddle products stay in safe ranges.
+    # We assume q_modulus < 2^30 so adds/subs and twiddle products
+    # stay in safe ranges.
     var coefficient_values: List[Int32]
     var total_length: Int
     var q_modulus: Int
@@ -159,3 +161,38 @@ struct Polynomial(Movable):
         self.is_in_ntt_i = True
         self.is_in_ntt_x = True
         self.is_in_ntt_w = True
+
+    fn sample_ternary(mut self):
+        for coefficient_index in range(self.total_length):
+            var random_value = Int(random_si64(-1, 1))
+            self.set_coefficient(coefficient_index, random_value)
+
+    fn sample_gaussian(mut self):
+        # Approximate centered noise as sum(42 Bernoulli bits) - 21.
+        for coefficient_index in range(self.total_length):
+            var sum_value: Int = 0
+            for bit_index in range(42):
+                _ = bit_index
+                sum_value += Int(random_si64(0, 1))
+            self.set_coefficient(coefficient_index, sum_value - 21)
+
+    fn sample_sparse(mut self, hamming_weight: Int):
+        # First reset all coefficients to 0
+        for coefficient_index in range(self.total_length):
+            self.coefficient_values[coefficient_index] = 0
+
+        var current_weight = 0
+        while current_weight < hamming_weight:
+            var random_index = Int(random_si64(0, self.total_length - 1))
+            if self.coefficient_values[random_index] == 0:
+                var sign = Int(random_si64(0, 1))
+                if sign == 0:
+                    self.set_coefficient(random_index, -1)
+                else:
+                    self.set_coefficient(random_index, 1)
+                current_weight += 1
+
+    fn sample_uniform(mut self):
+        for coefficient_index in range(self.total_length):
+            var random_value = Int(random_si64(0, self.q_modulus - 1))
+            self.set_coefficient(coefficient_index, random_value)
