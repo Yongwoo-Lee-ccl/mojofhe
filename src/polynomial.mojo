@@ -168,16 +168,13 @@ struct Polynomial(Movable):
             self.set_coefficient(coefficient_index, random_value)
 
     fn sample_gaussian(mut self):
-        # Using binomial distribution (sum of bits) as an approximation
-        # sum of 42 random bits centered around 0.
-        # We can simulate this by taking 42 pairs of (bit1 - bit2).
+        # Approximate centered noise as sum(42 Bernoulli bits) - 21.
         for coefficient_index in range(self.total_length):
             var sum_value: Int = 0
             for bit_index in range(42):
-                var bit_a = Int(random_si64(0, 1))
-                var bit_b = Int(random_si64(0, 1))
-                sum_value += bit_a - bit_b
-            self.set_coefficient(coefficient_index, sum_value)
+                _ = bit_index
+                sum_value += Int(random_si64(0, 1))
+            self.set_coefficient(coefficient_index, sum_value - 21)
 
     fn sample_sparse(mut self, hamming_weight: Int):
         # First reset all coefficients to 0
@@ -194,3 +191,8 @@ struct Polynomial(Movable):
                 else:
                     self.set_coefficient(random_index, 1)
                 current_weight += 1
+
+    fn sample_uniform(mut self):
+        for coefficient_index in range(self.total_length):
+            var random_value = Int(random_si64(0, self.q_modulus - 1))
+            self.set_coefficient(coefficient_index, random_value)
