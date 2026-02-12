@@ -1,5 +1,5 @@
 from collections import List
-from src.modular import mod_pow
+from src.modular import find_primitive_root, mod_pow
 
 
 fn _multiply_modulo_int32(
@@ -250,3 +250,92 @@ fn apply_cyclotomic_pruned_ntt(
         block_size,
         base_offset + (m_parameter * block_size),
     )
+
+
+fn apply_xyw_quotient_ntt_inplace(
+    mut coefficient_values: List[Int32],
+    n_power_of_2: Int,
+    p_power_of_3: Int,
+    modulus_int: Int,
+) -> Bool:
+    # Layout: [i_component][y_axis][x_axis][w_axis]
+    # Total length is 2 * n * n * phi_p where phi_p = 2 * (p / 3).
+    if p_power_of_3 % 3 != 0:
+        return False
+
+    var phi_p_degree = 2 * (p_power_of_3 // 3)
+    var expected_total_length = 2 * n_power_of_2 * n_power_of_2 * phi_p_degree
+    if len(coefficient_values) != expected_total_length:
+        return False
+
+    var root_imaginary_unit = find_primitive_root(modulus_int, 4)
+    var root_4n = find_primitive_root(modulus_int, 4 * n_power_of_2)
+    var root_for_minus_imaginary = mod_pow(root_4n, 3, modulus_int)
+    var root_p = find_primitive_root(modulus_int, p_power_of_3)
+    if (
+        root_imaginary_unit < 0
+        or root_4n < 0
+        or root_for_minus_imaginary < 0
+        or root_p < 0
+    ):
+        return False
+
+    # i-axis first.
+    apply_i_axis_transform(
+        coefficient_values,
+        expected_total_length,
+        Int32(root_imaginary_unit),
+        Int32(modulus_int),
+    )
+
+    # X-axis per i-component and Y slice.
+    var component_length = n_power_of_2 * n_power_of_2 * phi_p_degree
+    var y_slice_length = n_power_of_2 * phi_p_degree
+    for component_index in range(2):
+        var component_base_offset = component_index * component_length
+        var x_root_for_component = Int32(root_4n)
+        if component_index == 1:
+            x_root_for_component = Int32(root_for_minus_imaginary)
+        for y_axis_index in range(n_power_of_2):
+            var y_slice_offset = (
+                component_base_offset + y_axis_index * y_slice_length
+            )
+            apply_radix2_dif_ntt(
+                coefficient_values,
+                n_power_of_2,
+                x_root_for_component,
+                Int32(modulus_int),
+                phi_p_degree,
+                y_slice_offset,
+            )
+
+    # Y-axis per i-component, treating each Y point as a contiguous XW vector.
+    for component_index in range(2):
+        var component_base_offset = component_index * component_length
+        var y_root_for_component = Int32(root_4n)
+        if component_index == 1:
+            y_root_for_component = Int32(root_for_minus_imaginary)
+        apply_radix2_dif_ntt(
+            coefficient_values,
+            n_power_of_2,
+            y_root_for_component,
+            Int32(modulus_int),
+            y_slice_length,
+            component_base_offset,
+        )
+
+    # W-axis cyclotomic transform for every [i, y, x] lane.
+    var cyclotomic_m_parameter = p_power_of_3 // 3
+    var number_of_xy_slices = 2 * n_power_of_2 * n_power_of_2
+    for xy_slice_index in range(number_of_xy_slices):
+        var xy_slice_offset = xy_slice_index * phi_p_degree
+        apply_cyclotomic_pruned_ntt(
+            coefficient_values,
+            cyclotomic_m_parameter,
+            Int32(root_p),
+            Int32(modulus_int),
+            1,
+            xy_slice_offset,
+        )
+
+    return True
