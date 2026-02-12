@@ -20,6 +20,15 @@ done < <(git diff --cached --name-only --diff-filter=ACM | grep '\.mojo$' || tru
 if [ ${#staged_mojo_files[@]} -gt 0 ]; then
     echo "Formatting staged .mojo files..."
     printf "%s\n" "${staged_mojo_files[@]}" | xargs mojo format
+    
+    echo "Checking line length (max 80 characters)..."
+    long_lines=$(grep -n '.\{81,\}' "${staged_mojo_files[@]}" || true)
+    if [ -n "$long_lines" ]; then
+        echo "Error: The following files have lines exceeding 80 characters:"
+        echo "$long_lines"
+        exit 1
+    fi
+
     echo "Adding formatted files to the commit..."
     printf "%s\n" "${staged_mojo_files[@]}" | xargs git add
 fi
