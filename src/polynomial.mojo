@@ -32,9 +32,7 @@ struct Polynomial(Movable):
         self.q_modulus = q_val
         self.phi_p_degree = 2 * (p_val // 3)
         self.total_length = 2 * self.n_power_of_2 * self.phi_p_degree
-        self.coefficient_values = List[Int32]()
-        for offset in range(self.total_length):
-            self.coefficient_values.append(0)
+        self.coefficient_values = List[Int32](length=self.total_length, fill=0)
         self.is_in_ntt_i = False
         self.is_in_ntt_x = False
         self.is_in_ntt_w = False

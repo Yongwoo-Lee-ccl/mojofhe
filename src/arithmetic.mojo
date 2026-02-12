@@ -10,7 +10,7 @@ fn _multiply_and_modulo(
     )
 
 
-fn _power_modular(
+fn power_modular(
     base_value: Int, exponent_value: Int, modulus_value: Int
 ) -> Int:
     var result_accumulator: Int = 1
@@ -57,7 +57,7 @@ fn is_prime(number_to_test: Int) -> Bool:
         if current_base >= number_to_test:
             break
 
-        var miller_rabin_value = _power_modular(
+        var miller_rabin_value = power_modular(
             current_base, odd_component, number_to_test
         )
         if miller_rabin_value == 1 or miller_rabin_value == number_to_test - 1:

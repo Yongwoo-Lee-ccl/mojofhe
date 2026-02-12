@@ -1,22 +1,8 @@
-from src.arithmetic import is_prime
+from src.arithmetic import is_prime, power_modular
 
 
 fn mod_pow(base_value: Int, exponent_value: Int, modulus_value: Int) -> Int:
-    var result_value: Int = 1
-    var base_copy: Int = base_value % modulus_value
-    var exponent_copy: Int = exponent_value
-
-    while exponent_copy > 0:
-        if exponent_copy % 2 == 1:
-            result_value = Int(
-                (Int128(result_value) * Int128(base_copy))
-                % Int128(modulus_value)
-            )
-        base_copy = Int(
-            (Int128(base_copy) * Int128(base_copy)) % Int128(modulus_value)
-        )
-        exponent_copy //= 2
-    return result_value
+    return power_modular(base_value, exponent_value, modulus_value)
 
 
 fn find_suitable_q(n_dim: Int, p_dim: Int, target_bit_length: Int) -> Int:
