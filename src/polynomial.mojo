@@ -43,6 +43,17 @@ struct Polynomial(Movable):
             normalized_value += self.q_modulus
         self.coefficient_values[index] = Int32(normalized_value)
 
+    fn _add_modulus_if_needed(self, left_value: Int, right_value: Int) -> Int32:
+        var summed_value = left_value + right_value
+        if summed_value >= self.q_modulus:
+            summed_value -= self.q_modulus
+        return Int32(summed_value)
+
+    fn _multiply_modulus_i32(self, left_value: Int, right_value: Int) -> Int32:
+        return Int32(
+            (Int64(left_value) * Int64(right_value)) % Int64(self.q_modulus)
+        )
+
     fn transform_to_full_ntt(mut self):
         if not self.is_in_ntt_i:
             var root_j = Int32(find_primitive_root(self.q_modulus, 4))
@@ -99,12 +110,11 @@ struct Polynomial(Movable):
             self.n_power_of_2, self.p_power_of_3, self.q_modulus
         )
         for offset in range(self.total_length):
-            result_poly.coefficient_values[offset] = Int32(
-                (
-                    Int(self.coefficient_values[offset])
-                    + Int(other.coefficient_values[offset])
-                )
-                % self.q_modulus
+            result_poly.coefficient_values[
+                offset
+            ] = self._add_modulus_if_needed(
+                Int(self.coefficient_values[offset]),
+                Int(other.coefficient_values[offset]),
             )
         result_poly.is_in_ntt_i = self.is_in_ntt_i
         result_poly.is_in_ntt_x = self.is_in_ntt_x
@@ -113,12 +123,9 @@ struct Polynomial(Movable):
 
     fn add_inplace(mut self, other: Polynomial):
         for offset in range(self.total_length):
-            self.coefficient_values[offset] = Int32(
-                (
-                    Int(self.coefficient_values[offset])
-                    + Int(other.coefficient_values[offset])
-                )
-                % self.q_modulus
+            self.coefficient_values[offset] = self._add_modulus_if_needed(
+                Int(self.coefficient_values[offset]),
+                Int(other.coefficient_values[offset]),
             )
         self.is_in_ntt_i = self.is_in_ntt_i and other.is_in_ntt_i
         self.is_in_ntt_x = self.is_in_ntt_x and other.is_in_ntt_x
@@ -131,12 +138,9 @@ struct Polynomial(Movable):
             self.n_power_of_2, self.p_power_of_3, self.q_modulus
         )
         for offset in range(self.total_length):
-            var product_value = Int32(
-                (
-                    Int128(Int(self.coefficient_values[offset]))
-                    * Int128(Int(other.coefficient_values[offset]))
-                )
-                % Int128(self.q_modulus)
+            var product_value = self._multiply_modulus_i32(
+                Int(self.coefficient_values[offset]),
+                Int(other.coefficient_values[offset]),
             )
             result_poly.coefficient_values[offset] = product_value
         result_poly.is_in_ntt_i = True
@@ -148,12 +152,9 @@ struct Polynomial(Movable):
         self.transform_to_full_ntt()
         other.transform_to_full_ntt()
         for offset in range(self.total_length):
-            self.coefficient_values[offset] = Int32(
-                (
-                    Int128(Int(self.coefficient_values[offset]))
-                    * Int128(Int(other.coefficient_values[offset]))
-                )
-                % Int128(self.q_modulus)
+            self.coefficient_values[offset] = self._multiply_modulus_i32(
+                Int(self.coefficient_values[offset]),
+                Int(other.coefficient_values[offset]),
             )
         self.is_in_ntt_i = True
         self.is_in_ntt_x = True
