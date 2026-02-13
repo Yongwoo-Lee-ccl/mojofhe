@@ -3,19 +3,19 @@ from collections import List
 
 
 fn _multiply_and_modulo(
-    multiplicand: Int, multiplier: Int, modulus_value: Int
-) -> Int:
-    return Int(
-        (Int128(multiplicand) * Int128(multiplier)) % Int128(modulus_value)
+    multiplicand: UInt64, multiplier: UInt64, modulus_value: UInt64
+) -> UInt64:
+    return UInt64(
+        (UInt128(multiplicand) * UInt128(multiplier)) % UInt128(modulus_value)
     )
 
 
 fn power_modular(
-    base_value: Int, exponent_value: Int, modulus_value: Int
-) -> Int:
-    var result_accumulator: Int = 1
-    var base_shifted: Int = base_value % modulus_value
-    var exponent_remaining: Int = exponent_value
+    base_value: UInt64, exponent_value: UInt64, modulus_value: UInt64
+) -> UInt64:
+    var result_accumulator: UInt64 = 1
+    var base_shifted: UInt64 = base_value % modulus_value
+    var exponent_remaining: UInt64 = exponent_value
 
     while exponent_remaining > 0:
         if exponent_remaining % 2 == 1:
@@ -29,19 +29,19 @@ fn power_modular(
     return result_accumulator
 
 
-fn is_prime(number_to_test: Int) -> Bool:
+fn is_prime(number_to_test: UInt64) -> Bool:
     if number_to_test <= 3:
         return number_to_test > 1
     if number_to_test % 2 == 0 or number_to_test % 3 == 0:
         return False
 
-    var odd_component: Int = number_to_test - 1
-    var power_of_two_factor: Int = 0
+    var odd_component: UInt64 = number_to_test - 1
+    var power_of_two_factor: UInt64 = 0
     while odd_component % 2 == 0:
         odd_component //= 2
         power_of_two_factor += 1
 
-    var witness_bases = List[Int]()
+    var witness_bases = List[UInt64]()
     witness_bases.append(2)
     witness_bases.append(3)
     witness_bases.append(5)
@@ -64,7 +64,8 @@ fn is_prime(number_to_test: Int) -> Bool:
             continue
 
         var is_probably_composite = True
-        for repeat_index in range(power_of_two_factor - 1):
+        for repeat_index in range(Int(power_of_two_factor) - 1):
+            _ = repeat_index
             miller_rabin_value = _multiply_and_modulo(
                 miller_rabin_value, miller_rabin_value, number_to_test
             )
