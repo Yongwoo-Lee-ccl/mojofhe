@@ -7,6 +7,7 @@
 - [x] Testing script (`run_tests.sh`).
 - [x] Contribution rules (`rule.md`).
 - [x] Add line length limit (80 characters) to linting rules and enforcement.
+- [x] Refactor core arithmetic to use unsigned integers (UInt32/UInt64).
 
 ## To Do
 - [ ] Implement core FHE arithmetic operations in `src/arithmetic.mojo`.
