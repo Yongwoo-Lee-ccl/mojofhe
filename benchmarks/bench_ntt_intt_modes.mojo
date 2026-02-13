@@ -14,13 +14,6 @@ fn _make_input(total_length: Int, q_modulus: Int) -> List[Int32]:
     return input_values^
 
 
-fn _copy_values(source_values: List[Int32]) -> List[Int32]:
-    var copied_values = List[Int32]()
-    for coefficient_index in range(len(source_values)):
-        copied_values.append(source_values[coefficient_index])
-    return copied_values^
-
-
 fn _run_mode(
     mode_name: StringLiteral,
     base_input: List[Int32],
@@ -34,7 +27,7 @@ fn _run_mode(
     var checksum_accumulator: Int = 0
     for iteration_index in range(iterations):
         _ = iteration_index
-        var working_values = _copy_values(base_input)
+        var working_values = base_input.copy()
         var ntt_success = apply_ixw_quotient_ntt_inplace(
             working_values,
             n_power_of_2,

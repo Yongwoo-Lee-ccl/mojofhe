@@ -37,6 +37,30 @@ fn _multiply_modulo_int32(
     )
 
 
+fn _add_modulo(left_value: Int, right_value: Int, modulus_int: Int) -> Int:
+    var sum_value = left_value + right_value
+    if sum_value >= modulus_int:
+        sum_value -= modulus_int
+    return sum_value
+
+
+fn _sub_modulo(left_value: Int, right_value: Int, modulus_int: Int) -> Int:
+    var diff_value = left_value - right_value
+    if diff_value < 0:
+        diff_value += modulus_int
+    return diff_value
+
+
+fn _add_three_modulo(
+    first_value: Int, second_value: Int, third_value: Int, modulus_int: Int
+) -> Int:
+    return _add_modulo(
+        _add_modulo(first_value, second_value, modulus_int),
+        third_value,
+        modulus_int,
+    )
+
+
 fn apply_i_axis_transform(
     mut coefficient_values: List[Int32],
     total_length: Int,
@@ -252,10 +276,10 @@ fn apply_radix2_dif_ntt(
                     var lower_val = Int(
                         coefficient_values[lower_index_base + inner_offset]
                     )
-                    var sum_val = (upper_val + lower_val) % modulus_int
-                    var diff_val = (
-                        upper_val - lower_val + modulus_int
-                    ) % modulus_int
+                    var sum_val = _add_modulo(upper_val, lower_val, modulus_int)
+                    var diff_val = _sub_modulo(
+                        upper_val, lower_val, modulus_int
+                    )
                     coefficient_values[upper_index_base + inner_offset] = Int32(
                         sum_val
                     )
@@ -378,7 +402,9 @@ fn apply_radix2_dif_intt(
                         montgomery_r2,
                     )
                     var upper_recovered = _multiply_modulo_int32(
-                        (summed_value + difference_value) % modulus_int,
+                        _add_modulo(
+                            summed_value, difference_value, modulus_int
+                        ),
                         inverse_two_multiplier,
                         modulus_int,
                         barrett_ratio,
@@ -387,8 +413,9 @@ fn apply_radix2_dif_intt(
                         montgomery_r2,
                     )
                     var lower_recovered = _multiply_modulo_int32(
-                        (summed_value - difference_value + modulus_int)
-                        % modulus_int,
+                        _sub_modulo(
+                            summed_value, difference_value, modulus_int
+                        ),
                         inverse_two_multiplier,
                         modulus_int,
                         barrett_ratio,
@@ -502,9 +529,9 @@ fn apply_radix3_dif_ntt(
                     var third_value = Int(
                         coefficient_values[third_index_base + inner_offset]
                     )
-                    var sum_all = (
-                        first_value + second_value + third_value
-                    ) % modulus_int
+                    var sum_all = _add_three_modulo(
+                        first_value, second_value, third_value, modulus_int
+                    )
                     var second_weighted_zeta = _multiply_modulo_int32(
                         second_value,
                         root_order_3,
@@ -523,11 +550,12 @@ fn apply_radix3_dif_ntt(
                         montgomery_neg_inv,
                         montgomery_r2,
                     )
-                    var sum_zeta = (
-                        first_value
-                        + second_weighted_zeta
-                        + third_weighted_zeta_sq
-                    ) % modulus_int
+                    var sum_zeta = _add_three_modulo(
+                        first_value,
+                        second_weighted_zeta,
+                        third_weighted_zeta_sq,
+                        modulus_int,
+                    )
                     var second_weighted_zeta_sq = _multiply_modulo_int32(
                         second_value,
                         root_order_3_sq,
@@ -546,11 +574,12 @@ fn apply_radix3_dif_ntt(
                         montgomery_neg_inv,
                         montgomery_r2,
                     )
-                    var sum_zeta_sq = (
-                        first_value
-                        + second_weighted_zeta_sq
-                        + third_weighted_zeta
-                    ) % modulus_int
+                    var sum_zeta_sq = _add_three_modulo(
+                        first_value,
+                        second_weighted_zeta_sq,
+                        third_weighted_zeta,
+                        modulus_int,
+                    )
                     coefficient_values[first_index_base + inner_offset] = Int32(
                         sum_all
                     )
@@ -744,12 +773,12 @@ fn apply_radix3_dif_intt(
                     )
 
                     var recovered_first = _multiply_modulo_int32(
-                        (
-                            first_transformed
-                            + second_unweighted
-                            + third_unweighted
-                        )
-                        % modulus_int,
+                        _add_three_modulo(
+                            first_transformed,
+                            second_unweighted,
+                            third_unweighted,
+                            modulus_int,
+                        ),
                         inverse_three_multiplier,
                         modulus_int,
                         barrett_ratio,
@@ -777,12 +806,12 @@ fn apply_radix3_dif_intt(
                         montgomery_r2,
                     )
                     var recovered_second = _multiply_modulo_int32(
-                        (
-                            first_transformed
-                            + second_with_zeta_sq
-                            + third_with_zeta
-                        )
-                        % modulus_int,
+                        _add_three_modulo(
+                            first_transformed,
+                            second_with_zeta_sq,
+                            third_with_zeta,
+                            modulus_int,
+                        ),
                         inverse_three_multiplier,
                         modulus_int,
                         barrett_ratio,
@@ -810,12 +839,12 @@ fn apply_radix3_dif_intt(
                         montgomery_r2,
                     )
                     var recovered_third = _multiply_modulo_int32(
-                        (
-                            first_transformed
-                            + second_with_zeta
-                            + third_with_zeta_sq
-                        )
-                        % modulus_int,
+                        _add_three_modulo(
+                            first_transformed,
+                            second_with_zeta,
+                            third_with_zeta_sq,
+                            modulus_int,
+                        ),
                         inverse_three_multiplier,
                         modulus_int,
                         barrett_ratio,
@@ -929,7 +958,7 @@ fn apply_cyclotomic_pruned_ntt(
                 montgomery_r2,
             )
             var first_branch_value = _multiply_modulo_int32(
-                first_value + second_weighted_zeta,
+                _add_modulo(first_value, second_weighted_zeta, modulus_int),
                 current_twiddle,
                 modulus_int,
                 barrett_ratio,
@@ -947,7 +976,7 @@ fn apply_cyclotomic_pruned_ntt(
                 montgomery_r2,
             )
             var second_branch_value = _multiply_modulo_int32(
-                first_value + second_weighted_zeta_sq,
+                _add_modulo(first_value, second_weighted_zeta_sq, modulus_int),
                 twiddle_sq,
                 modulus_int,
                 barrett_ratio,
