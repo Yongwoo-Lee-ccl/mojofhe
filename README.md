@@ -70,3 +70,7 @@ Now, every time you commit a `.mojo` file, it will be automatically formatted ac
 
 ## Development
 (Add more sections for development guidelines, testing, contributing, etc., as the project evolves.)
+
+## Documentation
+- `docs/inverse-ntt.md`: inverse NTT APIs, round-trip tests, and NTT/INTT
+  benchmark modes.

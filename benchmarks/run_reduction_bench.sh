@@ -20,3 +20,10 @@ for run_index in 1 2 3; do
     /usr/bin/time -f "elapsed %e s" \
         mojo run -I . benchmarks/bench_ntt_montgomery.mojo
 done
+
+echo "Benchmarking NTT+INTT full path (barrett, montgomery, naive %)"
+for run_index in 1 2 3; do
+    echo "ntt/intt modes run $run_index"
+    /usr/bin/time -f "elapsed %e s" \
+        mojo run -I . benchmarks/bench_ntt_intt_modes.mojo
+done
