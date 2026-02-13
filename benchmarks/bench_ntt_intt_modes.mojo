@@ -6,16 +6,17 @@ from src.ntt import (
 )
 
 
-fn _make_input(total_length: Int, q_modulus: Int) -> List[Int32]:
-    var input_values = List[Int32]()
+fn _make_input(total_length: Int, q_modulus: UInt32) -> List[UInt32]:
+    var input_values = List[UInt32]()
+    var q_int = Int(q_modulus)
     for coefficient_index in range(total_length):
-        var seeded_value = (coefficient_index * 8191 + 12345) % q_modulus
-        input_values.append(Int32(seeded_value))
+        var seeded_value = (coefficient_index * 8191 + 12345) % q_int
+        input_values.append(UInt32(seeded_value))
     return input_values^
 
 
-fn _copy_values(source_values: List[Int32]) -> List[Int32]:
-    var copied_values = List[Int32]()
+fn _copy_values(source_values: List[UInt32]) -> List[UInt32]:
+    var copied_values = List[UInt32]()
     for coefficient_index in range(len(source_values)):
         copied_values.append(source_values[coefficient_index])
     return copied_values^
@@ -23,12 +24,11 @@ fn _copy_values(source_values: List[Int32]) -> List[Int32]:
 
 fn _run_mode(
     mode_name: StringLiteral,
-    base_input: List[Int32],
+    base_input: List[UInt32],
     n_power_of_2: Int,
     p_power_of_3: Int,
-    q_modulus: Int,
+    q_modulus: UInt32,
     use_montgomery: Bool,
-    use_naive_modulo: Bool,
 ):
     var iterations = 4
     var checksum_accumulator: Int = 0
@@ -41,7 +41,6 @@ fn _run_mode(
             p_power_of_3,
             q_modulus,
             use_montgomery,
-            use_naive_modulo,
         )
         if not ntt_success:
             print(mode_name, "NTT setup failed.")
@@ -52,7 +51,6 @@ fn _run_mode(
             p_power_of_3,
             q_modulus,
             use_montgomery,
-            use_naive_modulo,
         )
         if not intt_success:
             print(mode_name, "INTT setup failed.")
@@ -67,7 +65,8 @@ fn main() raises:
     var n_power_of_2 = 1 << 7
     var p_power_of_3 = 81  # 3^4
     var target_bits = 25
-    var q_modulus = find_suitable_q(n_power_of_2, p_power_of_3, target_bits)
+    var q_modulus_u64 = find_suitable_q(n_power_of_2, p_power_of_3, target_bits)
+    var q_modulus = UInt32(q_modulus_u64)
 
     var phi_p_degree = 2 * (p_power_of_3 // 3)
     var total_length = 2 * n_power_of_2 * phi_p_degree
@@ -80,7 +79,6 @@ fn main() raises:
         p_power_of_3,
         q_modulus,
         False,
-        False,
     )
     _run_mode(
         "montgomery",
@@ -88,15 +86,5 @@ fn main() raises:
         n_power_of_2,
         p_power_of_3,
         q_modulus,
-        True,
-        False,
-    )
-    _run_mode(
-        "naive_percent",
-        base_input,
-        n_power_of_2,
-        p_power_of_3,
-        q_modulus,
-        False,
         True,
     )
