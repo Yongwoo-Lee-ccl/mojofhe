@@ -11,18 +11,17 @@ fn test_barrett_and_montgomery_match_on_ntt_workload() raises:
     var n_power_of_2 = 1 << 7
     var p_power_of_3 = 81  # 3^4
     var target_bits = 25
-    var q_modulus = find_suitable_q(n_power_of_2, p_power_of_3, target_bits)
+    var q_modulus_u64 = find_suitable_q(n_power_of_2, p_power_of_3, target_bits)
+    var q_modulus = UInt32(q_modulus_u64)
 
     var phi_p_degree = 2 * (p_power_of_3 // 3)
     var total_length = 2 * n_power_of_2 * phi_p_degree
 
-    var input_coefficients = List[Int32]()
-    var barrett_output = List[Int32]()
-    var montgomery_output = List[Int32]()
+    var barrett_output = List[UInt32]()
+    var montgomery_output = List[UInt32]()
     for coefficient_index in range(total_length):
         _ = coefficient_index
-        var random_value = Int32(Int(random_si64(0, q_modulus - 1)))
-        input_coefficients.append(random_value)
+        var random_value = UInt32(Int(random_si64(0, Int(q_modulus) - 1)))
         barrett_output.append(random_value)
         montgomery_output.append(random_value)
 
