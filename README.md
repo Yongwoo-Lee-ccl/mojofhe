@@ -74,3 +74,5 @@ Now, every time you commit a `.mojo` file, it will be automatically formatted ac
 ## Documentation
 - `docs/inverse-ntt.md`: inverse NTT APIs, round-trip tests, and NTT/INTT
   benchmark modes.
+- `docs/ntt-new-functions.md`: Reference for recently added NTT APIs,
+  reduction modes, and related tests/benchmarks.
