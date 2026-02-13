@@ -14,16 +14,14 @@ fn apply_ixw_quotient_intt_inplace(
     p_power_of_3: Int,
     modulus_value: Int,
     use_montgomery: Bool = False,
-    use_naive_modulo: Bool = False,
 ) -> Bool
 ```
 
 - In-place inverse of `apply_ixw_quotient_ntt_inplace`.
 - Returns `False` when roots or input-size preconditions are not satisfied.
-- Supports three modular arithmetic modes:
-  - Barrett: `use_montgomery=False`, `use_naive_modulo=False`
+- Supports two modular arithmetic modes:
+  - Barrett: `use_montgomery=False`
   - Montgomery: `use_montgomery=True`
-  - Naive `%`: `use_naive_modulo=True` (non-Montgomery path)
 
 ### XYW inverse transform
 
@@ -54,7 +52,6 @@ fn apply_xyw_quotient_intt_inplace(
 
 - Barrett reduction
 - Montgomery reduction
-- Naive `%` reduction
 
 Run via:
 
