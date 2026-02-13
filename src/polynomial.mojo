@@ -1,6 +1,11 @@
 from collections import List
 from random import random_si64
-from src.modular import find_primitive_root, mod_pow
+from src.modular import (
+    find_primitive_root,
+    mod_pow,
+    compute_barrett_ratio,
+    multiply_mod_barrett,
+)
 from src.ntt import (
     apply_i_axis_transform,
     apply_radix2_dif_ntt,
@@ -18,6 +23,7 @@ struct Polynomial(Movable):
     var n_power_of_2: Int
     var p_power_of_3: Int
     var phi_p_degree: Int
+    var barrett_ratio: Int64
 
     var is_in_ntt_i: Bool
     var is_in_ntt_x: Bool
@@ -34,6 +40,7 @@ struct Polynomial(Movable):
         self.q_modulus = q_val
         self.phi_p_degree = 2 * (p_val // 3)
         self.total_length = 2 * self.n_power_of_2 * self.phi_p_degree
+        self.barrett_ratio = compute_barrett_ratio(self.q_modulus)
         self.coefficient_values = List[Int32](length=self.total_length, fill=0)
         self.is_in_ntt_i = False
         self.is_in_ntt_x = False
@@ -53,7 +60,9 @@ struct Polynomial(Movable):
 
     fn _multiply_modulus_i32(self, left_value: Int, right_value: Int) -> Int32:
         return Int32(
-            (Int64(left_value) * Int64(right_value)) % Int64(self.q_modulus)
+            multiply_mod_barrett(
+                left_value, right_value, self.q_modulus, self.barrett_ratio
+            )
         )
 
     fn transform_to_full_ntt(mut self):
