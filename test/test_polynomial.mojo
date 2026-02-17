@@ -1,6 +1,11 @@
 from testing import assert_true, TestSuite
 from src.modular import find_suitable_q
-from src.polynomial import Polynomial
+from src.polynomial import (
+    Polynomial,
+    RNSPolynomial,
+    integer_to_rns,
+    integer_from_rns,
+)
 from collections import List
 from random import random_si64
 
@@ -233,6 +238,113 @@ fn test_polynomial_multiplication_full_trials() raises:
             )
 
     print("test_polynomial_multiplication_full_trials passed.")
+
+
+fn test_rns_integer_roundtrip_add_multiply() raises:
+    print("Running test_rns_integer_roundtrip_add_multiply...")
+
+    var rns_moduli = List[UInt32]()
+    rns_moduli.append(65521)
+    rns_moduli.append(65519)
+    rns_moduli.append(65497)
+
+    var combined_modulus: UInt128 = 1
+    for modulus_index in range(len(rns_moduli)):
+        combined_modulus *= UInt128(rns_moduli[modulus_index])
+
+    var left_integer = (
+        combined_modulus - UInt128(123456789)
+    ) % combined_modulus
+    var right_integer = UInt128(9876543210123) % combined_modulus
+
+    var left_residue_values = integer_to_rns(left_integer, rns_moduli)
+    var right_residue_values = integer_to_rns(right_integer, rns_moduli)
+
+    var left_roundtrip = integer_from_rns(left_residue_values, rns_moduli)
+    var right_roundtrip = integer_from_rns(right_residue_values, rns_moduli)
+    assert_true(
+        left_roundtrip == left_integer,
+        "integer -> RNS -> integer should preserve left value",
+    )
+    assert_true(
+        right_roundtrip == right_integer,
+        "integer -> RNS -> integer should preserve right value",
+    )
+
+    var sum_residue_values = List[UInt32]()
+    var product_residue_values = List[UInt32]()
+    for modulus_index in range(len(rns_moduli)):
+        var modulus_value = rns_moduli[modulus_index]
+        var left_residue = left_residue_values[modulus_index]
+        var right_residue = right_residue_values[modulus_index]
+        var residue_sum = left_residue + right_residue
+        if residue_sum >= modulus_value:
+            residue_sum -= modulus_value
+        sum_residue_values.append(residue_sum)
+
+        var residue_product = UInt32(
+            (UInt64(left_residue) * UInt64(right_residue))
+            % UInt64(modulus_value)
+        )
+        product_residue_values.append(residue_product)
+
+    var expected_sum = (left_integer + right_integer) % combined_modulus
+    var expected_product = (left_integer * right_integer) % combined_modulus
+
+    assert_true(
+        integer_from_rns(sum_residue_values, rns_moduli) == expected_sum,
+        "RNS addition should match integer addition modulo product",
+    )
+    assert_true(
+        integer_from_rns(product_residue_values, rns_moduli)
+        == expected_product,
+        "RNS multiplication should match integer multiply modulo product",
+    )
+
+    var rns_poly_left = RNSPolynomial(1, 3, rns_moduli)
+    var rns_poly_right = RNSPolynomial(1, 3, rns_moduli)
+    for coefficient_index in range(rns_poly_left.total_length):
+        var left_value = (
+            left_integer + UInt128(97 * coefficient_index + 3)
+        ) % combined_modulus
+        var right_value = (
+            right_integer + UInt128(131 * coefficient_index + 5)
+        ) % combined_modulus
+        rns_poly_left.set_coefficient_from_integer(
+            coefficient_index, left_value
+        )
+        rns_poly_right.set_coefficient_from_integer(
+            coefficient_index, right_value
+        )
+
+    var rns_poly_sum = rns_poly_left.add_residuewise(rns_poly_right)
+    var rns_poly_product = rns_poly_left.multiply_residuewise(rns_poly_right)
+    for coefficient_index in range(rns_poly_left.total_length):
+        var expected_coeff_left = (
+            left_integer + UInt128(97 * coefficient_index + 3)
+        ) % combined_modulus
+        var expected_coeff_right = (
+            right_integer + UInt128(131 * coefficient_index + 5)
+        ) % combined_modulus
+        var expected_coeff_sum = (
+            expected_coeff_left + expected_coeff_right
+        ) % combined_modulus
+        var expected_coeff_product = (
+            expected_coeff_left * expected_coeff_right
+        ) % combined_modulus
+
+        assert_true(
+            rns_poly_sum.get_coefficient_integer(coefficient_index)
+            == expected_coeff_sum,
+            "RNSPolynomial residuewise add should match integer reference",
+        )
+        assert_true(
+            rns_poly_product.get_coefficient_integer(coefficient_index)
+            == expected_coeff_product,
+            "RNSPolynomial residuewise multiply should match integer reference",
+        )
+
+    print("test_rns_integer_roundtrip_add_multiply passed.")
 
 
 fn main() raises:

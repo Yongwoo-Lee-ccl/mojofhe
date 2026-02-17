@@ -13,6 +13,73 @@ from src.ntt import (
 )
 
 
+fn _mod_inverse(value: UInt32, modulus_value: UInt32) -> Int64:
+    var normalized_value = Int64(value % modulus_value)
+    var modulus_int64 = Int64(modulus_value)
+
+    var previous_remainder = modulus_int64
+    var current_remainder = normalized_value
+    var previous_coefficient: Int64 = 0
+    var current_coefficient: Int64 = 1
+
+    while current_remainder != 0:
+        var quotient_value = previous_remainder // current_remainder
+        var next_remainder = (
+            previous_remainder - quotient_value * current_remainder
+        )
+        previous_remainder = current_remainder
+        current_remainder = next_remainder
+
+        var next_coefficient = (
+            previous_coefficient - quotient_value * current_coefficient
+        )
+        previous_coefficient = current_coefficient
+        current_coefficient = next_coefficient
+
+    if previous_remainder != 1:
+        return -1
+
+    var normalized_coefficient = previous_coefficient % modulus_int64
+    if normalized_coefficient < 0:
+        normalized_coefficient += modulus_int64
+    return normalized_coefficient
+
+
+fn integer_to_rns(value: UInt128, moduli: List[UInt32]) -> List[UInt32]:
+    var residue_values = List[UInt32]()
+    for modulus_index in range(len(moduli)):
+        var modulus_value = moduli[modulus_index]
+        residue_values.append(UInt32(value % UInt128(modulus_value)))
+    return residue_values^
+
+
+fn integer_from_rns(
+    residue_values: List[UInt32], moduli: List[UInt32]
+) -> UInt128:
+    var combined_modulus: UInt128 = 1
+    for modulus_index in range(len(moduli)):
+        combined_modulus *= UInt128(moduli[modulus_index])
+
+    var reconstructed_value: UInt128 = 0
+    for modulus_index in range(len(moduli)):
+        var modulus_value = moduli[modulus_index]
+        var partial_modulus = combined_modulus // UInt128(modulus_value)
+        var partial_remainder = UInt32(partial_modulus % UInt128(modulus_value))
+        var inverse_res = _mod_inverse(partial_remainder, modulus_value)
+        if inverse_res < 0:
+            continue
+        var inverse_value = UInt128(UInt64(inverse_res))
+        var crt_term = (
+            UInt128(residue_values[modulus_index])
+            * partial_modulus
+            * inverse_value
+        ) % combined_modulus
+        reconstructed_value = (
+            reconstructed_value + crt_term
+        ) % combined_modulus
+    return reconstructed_value
+
+
 struct Polynomial(Movable):
     # Coefficients are stored as UInt32 lanes.
     # We assume q_modulus < 2^32.
@@ -208,3 +275,100 @@ struct Polynomial(Movable):
         for coefficient_index in range(self.total_length):
             var random_value = Int(random_si64(0, q_int - 1))
             self.set_coefficient(coefficient_index, random_value)
+
+
+struct RNSPolynomial(Movable):
+    # Outer axis: RNS channels (q0, q1, q2, ...).
+    # Inner axis: polynomial coefficients.
+    var residue_channels: List[List[UInt32]]
+    var rns_moduli: List[UInt32]
+    var n_power_of_2: Int
+    var p_power_of_3: Int
+    var total_length: Int
+    var combined_modulus: UInt128
+
+    fn __init__(
+        out self,
+        n_val: Int,
+        p_val: Int,
+        moduli: List[UInt32],
+    ):
+        self.residue_channels = List[List[UInt32]]()
+        self.rns_moduli = List[UInt32]()
+        self.n_power_of_2 = n_val
+        self.p_power_of_3 = p_val
+        self.combined_modulus = 1
+
+        var phi_p_degree = 2 * (self.p_power_of_3 // 3)
+        self.total_length = 2 * self.n_power_of_2 * phi_p_degree
+
+        for modulus_index in range(len(moduli)):
+            var modulus_value = moduli[modulus_index]
+            self.rns_moduli.append(modulus_value)
+            self.residue_channels.append(
+                List[UInt32](length=self.total_length, fill=0)
+            )
+            self.combined_modulus *= UInt128(modulus_value)
+
+    fn set_coefficient_from_integer(mut self, index: Int, value: UInt128):
+        var residue_values = integer_to_rns(value, self.rns_moduli)
+        for modulus_index in range(len(self.rns_moduli)):
+            self.residue_channels[modulus_index][index] = residue_values[
+                modulus_index
+            ]
+
+    fn get_coefficient_rns(self, index: Int) -> List[UInt32]:
+        var residue_values = List[UInt32]()
+        for modulus_index in range(len(self.rns_moduli)):
+            residue_values.append(self.residue_channels[modulus_index][index])
+        return residue_values^
+
+    fn get_coefficient_integer(self, index: Int) -> UInt128:
+        return integer_from_rns(
+            self.get_coefficient_rns(index), self.rns_moduli
+        )
+
+    fn add_residuewise(self, other: RNSPolynomial) -> RNSPolynomial:
+        var result_poly = RNSPolynomial(
+            self.n_power_of_2, self.p_power_of_3, self.rns_moduli
+        )
+        for modulus_index in range(len(self.rns_moduli)):
+            var modulus_value = self.rns_moduli[modulus_index]
+            for coefficient_index in range(self.total_length):
+                var left_value = self.residue_channels[modulus_index][
+                    coefficient_index
+                ]
+                var right_value = other.residue_channels[modulus_index][
+                    coefficient_index
+                ]
+                var summed_value = left_value + right_value
+                if summed_value >= modulus_value:
+                    summed_value -= modulus_value
+                result_poly.residue_channels[modulus_index][
+                    coefficient_index
+                ] = summed_value
+        return result_poly^
+
+    fn multiply_residuewise(self, other: RNSPolynomial) -> RNSPolynomial:
+        var result_poly = RNSPolynomial(
+            self.n_power_of_2, self.p_power_of_3, self.rns_moduli
+        )
+        for modulus_index in range(len(self.rns_moduli)):
+            var modulus_value = self.rns_moduli[modulus_index]
+            var barrett_ratio = compute_barrett_ratio(modulus_value)
+            for coefficient_index in range(self.total_length):
+                var left_value = self.residue_channels[modulus_index][
+                    coefficient_index
+                ]
+                var right_value = other.residue_channels[modulus_index][
+                    coefficient_index
+                ]
+                result_poly.residue_channels[modulus_index][
+                    coefficient_index
+                ] = multiply_mod_barrett(
+                    left_value,
+                    right_value,
+                    modulus_value,
+                    barrett_ratio,
+                )
+        return result_poly^
