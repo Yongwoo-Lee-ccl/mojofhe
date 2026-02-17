@@ -51,6 +51,22 @@ fn _sample_binary_message(polynomial_length: Int) -> List[UInt32]:
     return message_bits^
 
 
+fn _poly_mul_ntt(
+    left_values: List[UInt32],
+    right_values: List[UInt32],
+    n_power_of_2: Int,
+    p_power_of_3: Int,
+    q_modulus: UInt32,
+) -> List[UInt32]:
+    return rlwe_ring_multiply_ntt(
+        left_values,
+        right_values,
+        n_power_of_2,
+        p_power_of_3,
+        q_modulus,
+    )
+
+
 fn _expected_decrypt_rhs_ntt(
     message_bits: List[UInt32],
     n_power_of_2: Int,
@@ -198,6 +214,126 @@ fn test_rlwe_decrypt_equation_multiple_trials() raises:
         )
 
     print("test_rlwe_decrypt_equation_multiple_trials passed.")
+
+
+fn test_rlwe_ciphertext_addition_homomorphic() raises:
+    print("Running test_rlwe_ciphertext_addition_homomorphic...")
+
+    var n_power_of_2 = 4
+    var p_power_of_3 = 9
+    var q_modulus = UInt32(find_suitable_q(n_power_of_2, p_power_of_3, 20))
+    var key_pair = rlwe_keygen(n_power_of_2, p_power_of_3, q_modulus)
+    var message_0 = _sample_binary_message(
+        len(key_pair.secret_key_coeff_values)
+    )
+    var message_1 = _sample_binary_message(
+        len(key_pair.secret_key_coeff_values)
+    )
+
+    var encryption_0 = rlwe_encrypt_binary(message_0, key_pair)
+    var encryption_1 = rlwe_encrypt_binary(message_1, key_pair)
+
+    var decrypted_0 = rlwe_decrypt_ntt(
+        encryption_0.c0_ntt_values,
+        encryption_0.c1_ntt_values,
+        key_pair,
+    )
+    var decrypted_1 = rlwe_decrypt_ntt(
+        encryption_1.c0_ntt_values,
+        encryption_1.c1_ntt_values,
+        key_pair,
+    )
+
+    var added_c0 = _poly_add_modulus(
+        encryption_0.c0_ntt_values, encryption_1.c0_ntt_values, q_modulus
+    )
+    var added_c1 = _poly_add_modulus(
+        encryption_0.c1_ntt_values, encryption_1.c1_ntt_values, q_modulus
+    )
+    var decrypted_added = rlwe_decrypt_ntt(added_c0, added_c1, key_pair)
+    var expected_added = _poly_add_modulus(decrypted_0, decrypted_1, q_modulus)
+
+    assert_true(
+        _poly_equal(decrypted_added, expected_added),
+        "ciphertext addition should match addition after decryption",
+    )
+
+    print("test_rlwe_ciphertext_addition_homomorphic passed.")
+
+
+fn test_rlwe_ciphertext_hadamard_multiply_three_component_decrypt() raises:
+    print(
+        "Running"
+        " test_rlwe_ciphertext_hadamard_multiply_three_component_decrypt..."
+    )
+
+    var n_power_of_2 = 4
+    var p_power_of_3 = 9
+    var q_modulus = UInt32(find_suitable_q(n_power_of_2, p_power_of_3, 20))
+    var key_pair = rlwe_keygen(n_power_of_2, p_power_of_3, q_modulus)
+    var message_0 = _sample_binary_message(
+        len(key_pair.secret_key_coeff_values)
+    )
+    var message_1 = _sample_binary_message(
+        len(key_pair.secret_key_coeff_values)
+    )
+
+    var encryption_0 = rlwe_encrypt_binary(message_0, key_pair)
+    var encryption_1 = rlwe_encrypt_binary(message_1, key_pair)
+
+    var b0 = encryption_0.c0_ntt_values.copy()
+    var a0 = encryption_0.c1_ntt_values.copy()
+    var b1 = encryption_1.c0_ntt_values.copy()
+    var a1 = encryption_1.c1_ntt_values.copy()
+
+    var d0 = _poly_mul_ntt(b0, b1, n_power_of_2, p_power_of_3, q_modulus)
+    var a0b1 = _poly_mul_ntt(a0, b1, n_power_of_2, p_power_of_3, q_modulus)
+    var a1b0 = _poly_mul_ntt(a1, b0, n_power_of_2, p_power_of_3, q_modulus)
+    var d1 = _poly_add_modulus(a0b1, a1b0, q_modulus)
+    var d2 = _poly_mul_ntt(a0, a1, n_power_of_2, p_power_of_3, q_modulus)
+
+    var s_ntt = key_pair.secret_key_ntt_values.copy()
+    var s_square_ntt = _poly_mul_ntt(
+        s_ntt, s_ntt, n_power_of_2, p_power_of_3, q_modulus
+    )
+    var d1_times_s = _poly_mul_ntt(
+        d1, s_ntt, n_power_of_2, p_power_of_3, q_modulus
+    )
+    var d2_times_s_square = _poly_mul_ntt(
+        d2, s_square_ntt, n_power_of_2, p_power_of_3, q_modulus
+    )
+    var three_component_decrypt = _poly_add_modulus(
+        _poly_add_modulus(d0, d1_times_s, q_modulus),
+        d2_times_s_square,
+        q_modulus,
+    )
+
+    var decrypted_0 = rlwe_decrypt_ntt(
+        encryption_0.c0_ntt_values,
+        encryption_0.c1_ntt_values,
+        key_pair,
+    )
+    var decrypted_1 = rlwe_decrypt_ntt(
+        encryption_1.c0_ntt_values,
+        encryption_1.c1_ntt_values,
+        key_pair,
+    )
+    var expected_product = _poly_mul_ntt(
+        decrypted_0,
+        decrypted_1,
+        n_power_of_2,
+        p_power_of_3,
+        q_modulus,
+    )
+
+    assert_true(
+        _poly_equal(three_component_decrypt, expected_product),
+        "d0 + d1*s + d2*s^2 should match product of decrypted polynomials",
+    )
+
+    print(
+        "test_rlwe_ciphertext_hadamard_multiply_three_component_decrypt passed."
+    )
 
 
 fn main() raises:
