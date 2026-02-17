@@ -1,4 +1,5 @@
 from collections import List
+from src.modular import compute_barrett_ratio, multiply_mod_barrett
 from src.polynomial import Polynomial
 
 
@@ -42,71 +43,100 @@ fn _poly_subtract_modulus(
     return result_values^
 
 
-fn _negacyclic_multiply_modulus(
-    left_values: List[UInt32],
-    right_values: List[UInt32],
+fn _make_polynomial_from_coefficients(
+    coefficient_values: List[UInt32],
+    n_power_of_2: Int,
+    p_power_of_3: Int,
+    modulus_value: UInt32,
+) -> Polynomial:
+    var polynomial_value = Polynomial(n_power_of_2, p_power_of_3, modulus_value)
+    for coefficient_index in range(polynomial_value.total_length):
+        polynomial_value.coefficient_values[
+            coefficient_index
+        ] = coefficient_values[coefficient_index]
+    return polynomial_value^
+
+
+fn _sample_existing_uniform(
+    n_power_of_2: Int, p_power_of_3: Int, modulus_value: UInt32
+) -> List[UInt32]:
+    var sampled_polynomial = Polynomial(
+        n_power_of_2, p_power_of_3, modulus_value
+    )
+    sampled_polynomial.sample_uniform()
+    return sampled_polynomial.coefficient_values.copy()
+
+
+fn _sample_existing_ternary(
+    n_power_of_2: Int, p_power_of_3: Int, modulus_value: UInt32
+) -> List[UInt32]:
+    var sampled_polynomial = Polynomial(
+        n_power_of_2, p_power_of_3, modulus_value
+    )
+    sampled_polynomial.sample_ternary()
+    return sampled_polynomial.coefficient_values.copy()
+
+
+fn _sample_existing_gaussian(
+    n_power_of_2: Int, p_power_of_3: Int, modulus_value: UInt32
+) -> List[UInt32]:
+    var sampled_polynomial = Polynomial(
+        n_power_of_2, p_power_of_3, modulus_value
+    )
+    sampled_polynomial.sample_gaussian()
+    return sampled_polynomial.coefficient_values.copy()
+
+
+fn _to_ntt_with_existing_transform(
+    coefficient_values: List[UInt32],
+    n_power_of_2: Int,
+    p_power_of_3: Int,
     modulus_value: UInt32,
 ) -> List[UInt32]:
-    var polynomial_degree = len(left_values)
-    var result_values = List[UInt32](length=polynomial_degree, fill=0)
-    for left_index in range(polynomial_degree):
-        for right_index in range(polynomial_degree):
-            var target_index = left_index + right_index
-            var signed_product = Int64(left_values[left_index]) * Int64(
-                right_values[right_index]
-            )
-            if target_index >= polynomial_degree:
-                target_index -= polynomial_degree
-                signed_product = -signed_product
-            var accumulated_value = (
-                Int64(result_values[target_index]) + signed_product
-            )
-            result_values[target_index] = _normalize_modulus(
-                accumulated_value, modulus_value
-            )
+    var polynomial_value = _make_polynomial_from_coefficients(
+        coefficient_values, n_power_of_2, p_power_of_3, modulus_value
+    )
+    polynomial_value.transform_to_full_ntt()
+    return polynomial_value.coefficient_values.copy()
+
+
+fn _multiply_with_existing_ntt(
+    left_coefficient_values: List[UInt32],
+    right_coefficient_values: List[UInt32],
+    n_power_of_2: Int,
+    p_power_of_3: Int,
+    modulus_value: UInt32,
+) -> List[UInt32]:
+    # Uses existing Polynomial.multiply(), which internally applies the
+    # project's multivariate NTT pipeline for this quotient ring.
+    var left_poly = _make_polynomial_from_coefficients(
+        left_coefficient_values, n_power_of_2, p_power_of_3, modulus_value
+    )
+    var right_poly = _make_polynomial_from_coefficients(
+        right_coefficient_values, n_power_of_2, p_power_of_3, modulus_value
+    )
+    var product_poly = left_poly.multiply(right_poly)
+    return product_poly.coefficient_values.copy()
+
+
+fn _pointwise_multiply_ntt_modulus(
+    left_ntt_values: List[UInt32],
+    right_ntt_values: List[UInt32],
+    modulus_value: UInt32,
+) -> List[UInt32]:
+    var result_values = List[UInt32](length=len(left_ntt_values), fill=0)
+    var barrett_ratio = compute_barrett_ratio(modulus_value)
+    for coefficient_index in range(len(left_ntt_values)):
+        result_values[coefficient_index] = multiply_mod_barrett(
+            left_ntt_values[coefficient_index],
+            right_ntt_values[coefficient_index],
+            modulus_value,
+            barrett_ratio,
+        )
     return result_values^
 
 
-fn _sample_via_existing_polynomial(
-    polynomial_degree: Int, modulus_value: UInt32
-) -> List[UInt32]:
-    if polynomial_degree != 16:
-        return List[UInt32](length=polynomial_degree, fill=0)
-    var sampled_poly = Polynomial(4, 3, modulus_value)
-    return sampled_poly.coefficient_values.copy()
-
-
-fn _sample_uniform_polynomial(
-    polynomial_degree: Int, modulus_value: UInt32
-) -> List[UInt32]:
-    var sampled_poly = Polynomial(4, 3, modulus_value)
-    if polynomial_degree != sampled_poly.total_length:
-        return _sample_via_existing_polynomial(polynomial_degree, modulus_value)
-    sampled_poly.sample_uniform()
-    return sampled_poly.coefficient_values.copy()
-
-
-fn _sample_ternary_polynomial(
-    polynomial_degree: Int, modulus_value: UInt32
-) -> List[UInt32]:
-    var sampled_poly = Polynomial(4, 3, modulus_value)
-    if polynomial_degree != sampled_poly.total_length:
-        return _sample_via_existing_polynomial(polynomial_degree, modulus_value)
-    sampled_poly.sample_ternary()
-    return sampled_poly.coefficient_values.copy()
-
-
-fn _sample_gaussian_polynomial(
-    polynomial_degree: Int, modulus_value: UInt32
-) -> List[UInt32]:
-    var sampled_poly = Polynomial(4, 3, modulus_value)
-    if polynomial_degree != sampled_poly.total_length:
-        return _sample_via_existing_polynomial(polynomial_degree, modulus_value)
-    sampled_poly.sample_gaussian()
-    return sampled_poly.coefficient_values.copy()
-
-
-fn _encode_plaintext_binary(
+fn _encode_binary_plaintext_coefficients(
     plaintext_bits: List[UInt32], modulus_value: UInt32
 ) -> List[UInt32]:
     var encoded_values = List[UInt32](length=len(plaintext_bits), fill=0)
@@ -117,125 +147,220 @@ fn _encode_plaintext_binary(
     return encoded_values^
 
 
-fn _decode_plaintext_binary(
-    encoded_values: List[UInt32], modulus_value: UInt32
-) -> List[UInt32]:
-    var decoded_values = List[UInt32](length=len(encoded_values), fill=0)
-    var scaling_value = Int64(modulus_value // 2)
-    var modulus_int64 = Int64(modulus_value)
-    for coefficient_index in range(len(encoded_values)):
-        var value = Int64(encoded_values[coefficient_index])
-        var distance_to_zero = value
-        if modulus_int64 - value < distance_to_zero:
-            distance_to_zero = modulus_int64 - value
-
-        var centered_delta_distance = value - scaling_value
-        if centered_delta_distance < 0:
-            centered_delta_distance = -centered_delta_distance
-        if modulus_int64 - centered_delta_distance < centered_delta_distance:
-            centered_delta_distance = modulus_int64 - centered_delta_distance
-
-        if centered_delta_distance < distance_to_zero:
-            decoded_values[coefficient_index] = 1
-    return decoded_values^
-
-
 struct RLWEKeyPair(Movable):
-    var secret_key_values: List[UInt32]
-    var public_a_values: List[UInt32]
-    var public_b_values: List[UInt32]
+    var n_power_of_2: Int
+    var p_power_of_3: Int
+    var q_modulus: UInt32
+    var secret_key_coeff_values: List[UInt32]
+    var secret_key_ntt_values: List[UInt32]
+    var public_a_ntt_values: List[UInt32]
+    var public_b_ntt_values: List[UInt32]
 
     fn __init__(
         out self,
-        secret_key_values: List[UInt32],
-        public_a_values: List[UInt32],
-        public_b_values: List[UInt32],
+        n_power_of_2: Int,
+        p_power_of_3: Int,
+        q_modulus: UInt32,
+        secret_key_coeff_values: List[UInt32],
+        secret_key_ntt_values: List[UInt32],
+        public_a_ntt_values: List[UInt32],
+        public_b_ntt_values: List[UInt32],
     ):
-        self.secret_key_values = secret_key_values.copy()
-        self.public_a_values = public_a_values.copy()
-        self.public_b_values = public_b_values.copy()
+        self.n_power_of_2 = n_power_of_2
+        self.p_power_of_3 = p_power_of_3
+        self.q_modulus = q_modulus
+        self.secret_key_coeff_values = secret_key_coeff_values.copy()
+        self.secret_key_ntt_values = secret_key_ntt_values.copy()
+        self.public_a_ntt_values = public_a_ntt_values.copy()
+        self.public_b_ntt_values = public_b_ntt_values.copy()
 
 
-struct RLWECiphertext(Movable):
-    var c0_values: List[UInt32]
-    var c1_values: List[UInt32]
+struct RLWEEncryptionResult(Movable):
+    var c0_ntt_values: List[UInt32]
+    var c1_ntt_values: List[UInt32]
+    var ephemeral_u_ntt_values: List[UInt32]
+    var error_1_ntt_values: List[UInt32]
+    var error_2_ntt_values: List[UInt32]
 
-    fn __init__(out self, c0_values: List[UInt32], c1_values: List[UInt32]):
-        self.c0_values = c0_values.copy()
-        self.c1_values = c1_values.copy()
+    fn __init__(
+        out self,
+        c0_ntt_values: List[UInt32],
+        c1_ntt_values: List[UInt32],
+        ephemeral_u_ntt_values: List[UInt32],
+        error_1_ntt_values: List[UInt32],
+        error_2_ntt_values: List[UInt32],
+    ):
+        self.c0_ntt_values = c0_ntt_values.copy()
+        self.c1_ntt_values = c1_ntt_values.copy()
+        self.ephemeral_u_ntt_values = ephemeral_u_ntt_values.copy()
+        self.error_1_ntt_values = error_1_ntt_values.copy()
+        self.error_2_ntt_values = error_2_ntt_values.copy()
 
 
-fn rlwe_keygen(polynomial_degree: Int, modulus_value: UInt32) -> RLWEKeyPair:
-    var secret_values = _sample_ternary_polynomial(
-        polynomial_degree, modulus_value
+fn rlwe_keygen(
+    n_power_of_2: Int,
+    p_power_of_3: Int,
+    modulus_value: UInt32,
+) -> RLWEKeyPair:
+    var secret_key_coeff_values = _sample_existing_ternary(
+        n_power_of_2, p_power_of_3, modulus_value
     )
-    var public_a_values = _sample_uniform_polynomial(
-        polynomial_degree, modulus_value
+    var public_a_coeff_values = _sample_existing_uniform(
+        n_power_of_2, p_power_of_3, modulus_value
     )
-    var error_values = _sample_gaussian_polynomial(
-        polynomial_degree, modulus_value
+    var error_coeff_values = _sample_existing_gaussian(
+        n_power_of_2, p_power_of_3, modulus_value
     )
 
-    var a_times_secret = _negacyclic_multiply_modulus(
-        public_a_values, secret_values, modulus_value
+    var secret_key_ntt_values = _to_ntt_with_existing_transform(
+        secret_key_coeff_values,
+        n_power_of_2,
+        p_power_of_3,
+        modulus_value,
     )
-    var error_minus_a_times_secret = _poly_subtract_modulus(
-        error_values, a_times_secret, modulus_value
+    var public_a_ntt_values = _to_ntt_with_existing_transform(
+        public_a_coeff_values,
+        n_power_of_2,
+        p_power_of_3,
+        modulus_value,
+    )
+    var error_ntt_values = _to_ntt_with_existing_transform(
+        error_coeff_values,
+        n_power_of_2,
+        p_power_of_3,
+        modulus_value,
+    )
+
+    var a_times_secret_ntt_values = _pointwise_multiply_ntt_modulus(
+        public_a_ntt_values, secret_key_ntt_values, modulus_value
+    )
+    var public_b_ntt_values = _poly_subtract_modulus(
+        error_ntt_values, a_times_secret_ntt_values, modulus_value
     )
 
     return RLWEKeyPair(
-        secret_values, public_a_values, error_minus_a_times_secret
+        n_power_of_2,
+        p_power_of_3,
+        modulus_value,
+        secret_key_coeff_values,
+        secret_key_ntt_values,
+        public_a_ntt_values,
+        public_b_ntt_values,
     )
 
 
 fn rlwe_encrypt_binary(
-    plaintext_bits: List[UInt32],
-    public_a_values: List[UInt32],
-    public_b_values: List[UInt32],
-    modulus_value: UInt32,
-) -> RLWECiphertext:
-    var polynomial_degree = len(plaintext_bits)
-    var ephemeral_values = _sample_ternary_polynomial(
-        polynomial_degree, modulus_value
+    plaintext_bits: List[UInt32], key_pair: RLWEKeyPair
+) -> RLWEEncryptionResult:
+    var encoded_plaintext_coeff_values = _encode_binary_plaintext_coefficients(
+        plaintext_bits, key_pair.q_modulus
     )
-    var error_1_values = _sample_gaussian_polynomial(
-        polynomial_degree, modulus_value
-    )
-    var error_2_values = _sample_gaussian_polynomial(
-        polynomial_degree, modulus_value
+    var encoded_plaintext_ntt_values = _to_ntt_with_existing_transform(
+        encoded_plaintext_coeff_values,
+        key_pair.n_power_of_2,
+        key_pair.p_power_of_3,
+        key_pair.q_modulus,
     )
 
-    var public_b_times_ephemeral = _negacyclic_multiply_modulus(
-        public_b_values, ephemeral_values, modulus_value
+    var ephemeral_u_coeff_values = _sample_existing_ternary(
+        key_pair.n_power_of_2, key_pair.p_power_of_3, key_pair.q_modulus
     )
-    var public_a_times_ephemeral = _negacyclic_multiply_modulus(
-        public_a_values, ephemeral_values, modulus_value
+    var error_1_coeff_values = _sample_existing_gaussian(
+        key_pair.n_power_of_2, key_pair.p_power_of_3, key_pair.q_modulus
     )
-    var encoded_plaintext = _encode_plaintext_binary(
-        plaintext_bits, modulus_value
-    )
-    var c0_with_error = _poly_add_modulus(
-        public_b_times_ephemeral, error_1_values, modulus_value
-    )
-    var c0_values = _poly_add_modulus(
-        c0_with_error, encoded_plaintext, modulus_value
-    )
-    var c1_values = _poly_add_modulus(
-        public_a_times_ephemeral, error_2_values, modulus_value
+    var error_2_coeff_values = _sample_existing_gaussian(
+        key_pair.n_power_of_2, key_pair.p_power_of_3, key_pair.q_modulus
     )
 
-    return RLWECiphertext(c0_values, c1_values)
+    var ephemeral_u_ntt_values = _to_ntt_with_existing_transform(
+        ephemeral_u_coeff_values,
+        key_pair.n_power_of_2,
+        key_pair.p_power_of_3,
+        key_pair.q_modulus,
+    )
+    var error_1_ntt_values = _to_ntt_with_existing_transform(
+        error_1_coeff_values,
+        key_pair.n_power_of_2,
+        key_pair.p_power_of_3,
+        key_pair.q_modulus,
+    )
+    var error_2_ntt_values = _to_ntt_with_existing_transform(
+        error_2_coeff_values,
+        key_pair.n_power_of_2,
+        key_pair.p_power_of_3,
+        key_pair.q_modulus,
+    )
+
+    var public_b_times_u_ntt_values = _pointwise_multiply_ntt_modulus(
+        key_pair.public_b_ntt_values,
+        ephemeral_u_ntt_values,
+        key_pair.q_modulus,
+    )
+    var public_a_times_u_ntt_values = _pointwise_multiply_ntt_modulus(
+        key_pair.public_a_ntt_values,
+        ephemeral_u_ntt_values,
+        key_pair.q_modulus,
+    )
+
+    var c0_with_error_values = _poly_add_modulus(
+        public_b_times_u_ntt_values, error_1_ntt_values, key_pair.q_modulus
+    )
+    var c0_ntt_values = _poly_add_modulus(
+        c0_with_error_values, encoded_plaintext_ntt_values, key_pair.q_modulus
+    )
+    var c1_ntt_values = _poly_add_modulus(
+        public_a_times_u_ntt_values, error_2_ntt_values, key_pair.q_modulus
+    )
+
+    return RLWEEncryptionResult(
+        c0_ntt_values,
+        c1_ntt_values,
+        ephemeral_u_ntt_values,
+        error_1_ntt_values,
+        error_2_ntt_values,
+    )
 
 
-fn rlwe_decrypt_binary(
-    ciphertext_value: RLWECiphertext,
-    secret_key_values: List[UInt32],
+fn rlwe_decrypt_ntt(
+    c0_ntt_values: List[UInt32],
+    c1_ntt_values: List[UInt32],
+    key_pair: RLWEKeyPair,
+) -> List[UInt32]:
+    var c1_times_secret_ntt_values = _pointwise_multiply_ntt_modulus(
+        c1_ntt_values,
+        key_pair.secret_key_ntt_values,
+        key_pair.q_modulus,
+    )
+    return _poly_add_modulus(
+        c0_ntt_values,
+        c1_times_secret_ntt_values,
+        key_pair.q_modulus,
+    )
+
+
+fn rlwe_ring_multiply_ntt(
+    left_ntt_values: List[UInt32],
+    right_ntt_values: List[UInt32],
+    n_power_of_2: Int,
+    p_power_of_3: Int,
     modulus_value: UInt32,
 ) -> List[UInt32]:
-    var c1_times_secret = _negacyclic_multiply_modulus(
-        ciphertext_value.c1_values, secret_key_values, modulus_value
+    _ = n_power_of_2
+    _ = p_power_of_3
+    return _pointwise_multiply_ntt_modulus(
+        left_ntt_values, right_ntt_values, modulus_value
     )
-    var decrypted_scaled_values = _poly_add_modulus(
-        ciphertext_value.c0_values, c1_times_secret, modulus_value
+
+
+fn encode_binary_plaintext_ntt(
+    plaintext_bits: List[UInt32],
+    n_power_of_2: Int,
+    p_power_of_3: Int,
+    modulus_value: UInt32,
+) -> List[UInt32]:
+    return _to_ntt_with_existing_transform(
+        _encode_binary_plaintext_coefficients(plaintext_bits, modulus_value),
+        n_power_of_2,
+        p_power_of_3,
+        modulus_value,
     )
-    return _decode_plaintext_binary(decrypted_scaled_values, modulus_value)
