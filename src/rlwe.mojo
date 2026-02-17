@@ -1,5 +1,5 @@
 from collections import List
-from random import random_si64
+from src.polynomial import Polynomial
 
 
 fn _normalize_modulus(value: Int64, modulus_value: UInt32) -> UInt32:
@@ -67,44 +67,43 @@ fn _negacyclic_multiply_modulus(
     return result_values^
 
 
+fn _sample_via_existing_polynomial(
+    polynomial_degree: Int, modulus_value: UInt32
+) -> List[UInt32]:
+    if polynomial_degree != 16:
+        return List[UInt32](length=polynomial_degree, fill=0)
+    var sampled_poly = Polynomial(4, 3, modulus_value)
+    return sampled_poly.coefficient_values.copy()
+
+
 fn _sample_uniform_polynomial(
     polynomial_degree: Int, modulus_value: UInt32
 ) -> List[UInt32]:
-    var sampled_values = List[UInt32](length=polynomial_degree, fill=0)
-    var modulus_int = Int(modulus_value)
-    for coefficient_index in range(polynomial_degree):
-        sampled_values[coefficient_index] = UInt32(
-            Int(random_si64(0, modulus_int - 1))
-        )
-    return sampled_values^
+    var sampled_poly = Polynomial(4, 3, modulus_value)
+    if polynomial_degree != sampled_poly.total_length:
+        return _sample_via_existing_polynomial(polynomial_degree, modulus_value)
+    sampled_poly.sample_uniform()
+    return sampled_poly.coefficient_values.copy()
 
 
 fn _sample_ternary_polynomial(
     polynomial_degree: Int, modulus_value: UInt32
 ) -> List[UInt32]:
-    var sampled_values = List[UInt32](length=polynomial_degree, fill=0)
-    for coefficient_index in range(polynomial_degree):
-        var ternary_value = Int64(random_si64(-1, 1))
-        sampled_values[coefficient_index] = _normalize_modulus(
-            ternary_value, modulus_value
-        )
-    return sampled_values^
+    var sampled_poly = Polynomial(4, 3, modulus_value)
+    if polynomial_degree != sampled_poly.total_length:
+        return _sample_via_existing_polynomial(polynomial_degree, modulus_value)
+    sampled_poly.sample_ternary()
+    return sampled_poly.coefficient_values.copy()
 
 
 fn _sample_gaussian_polynomial(
     polynomial_degree: Int, modulus_value: UInt32
 ) -> List[UInt32]:
-    var sampled_values = List[UInt32](length=polynomial_degree, fill=0)
-    for coefficient_index in range(polynomial_degree):
-        var bernoulli_sum: Int64 = 0
-        for bit_index in range(12):
-            _ = bit_index
-            bernoulli_sum += Int64(random_si64(0, 1))
-        var centered_noise = bernoulli_sum - 6
-        sampled_values[coefficient_index] = _normalize_modulus(
-            centered_noise, modulus_value
-        )
-    return sampled_values^
+    var sampled_poly = Polynomial(4, 3, modulus_value)
+    if polynomial_degree != sampled_poly.total_length:
+        return _sample_via_existing_polynomial(polynomial_degree, modulus_value)
+    sampled_poly.sample_gaussian()
+    return sampled_poly.coefficient_values.copy()
 
 
 fn _encode_plaintext_binary(
