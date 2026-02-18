@@ -1,5 +1,10 @@
 from collections import List
-from src.modular import compute_barrett_ratio, multiply_mod_barrett
+from src.modular import (
+    compute_barrett_ratio,
+    multiply_mod_barrett,
+    find_primitive_root,
+)
+from src.ntt import apply_cyclotomic_pruned_ntt
 
 
 fn _normalize_modulus(value: Int64, modulus_value: UInt32) -> UInt32:
@@ -70,64 +75,6 @@ fn _mod_inverse(value: UInt32, modulus_value: UInt32) -> UInt32:
     return UInt32(normalized_coefficient)
 
 
-fn _multiply_w_polynomials_mod_cyclotomic(
-    left_values: List[UInt32],
-    right_values: List[UInt32],
-    p_power_of_3: Int,
-    modulus_value: UInt32,
-    barrett_ratio: UInt64,
-) -> List[UInt32]:
-    var phi_degree = 2 * (p_power_of_3 // 3)
-    var reduction_shift = p_power_of_3 // 3
-    var product_degree_bound = 2 * phi_degree - 1
-
-    var unreduced_values = List[UInt32](length=product_degree_bound, fill=0)
-    for left_index in range(phi_degree):
-        var left_coefficient = left_values[left_index]
-        if left_coefficient == 0:
-            continue
-        for right_index in range(phi_degree):
-            var right_coefficient = right_values[right_index]
-            if right_coefficient == 0:
-                continue
-            var product_value = _multiply_modulus(
-                left_coefficient,
-                right_coefficient,
-                modulus_value,
-                barrett_ratio,
-            )
-            var product_index = left_index + right_index
-            unreduced_values[product_index] = _add_modulus(
-                unreduced_values[product_index],
-                product_value,
-                modulus_value,
-            )
-
-    var reduction_index = product_degree_bound - 1
-    while reduction_index >= phi_degree:
-        var top_coefficient = unreduced_values[reduction_index]
-        if top_coefficient != 0:
-            unreduced_values[reduction_index] = 0
-            var first_reduction_index = reduction_index - reduction_shift
-            var second_reduction_index = reduction_index - phi_degree
-            unreduced_values[first_reduction_index] = _subtract_modulus(
-                unreduced_values[first_reduction_index],
-                top_coefficient,
-                modulus_value,
-            )
-            unreduced_values[second_reduction_index] = _subtract_modulus(
-                unreduced_values[second_reduction_index],
-                top_coefficient,
-                modulus_value,
-            )
-        reduction_index -= 1
-
-    var reduced_values = List[UInt32](length=phi_degree, fill=0)
-    for coefficient_index in range(phi_degree):
-        reduced_values[coefficient_index] = unreduced_values[coefficient_index]
-    return reduced_values^
-
-
 fn _apply_w_inverse_automorphism(
     coefficient_values: List[UInt32],
     p_power_of_3: Int,
@@ -177,6 +124,23 @@ fn _apply_w_inverse_automorphism(
     return reduced_values^
 
 
+fn _pointwise_w_multiply_ntt(
+    left_values: List[UInt32],
+    right_values: List[UInt32],
+    modulus_value: UInt32,
+    barrett_ratio: UInt64,
+) -> List[UInt32]:
+    var product_values = List[UInt32](length=len(left_values), fill=0)
+    for coefficient_index in range(len(left_values)):
+        product_values[coefficient_index] = _multiply_modulus(
+            left_values[coefficient_index],
+            right_values[coefficient_index],
+            modulus_value,
+            barrett_ratio,
+        )
+    return product_values^
+
+
 struct EncodedPolynomial(Movable):
     # Coefficients for a(X,Y,W)=sum_{x,y,w} a_{xyw} X^x Y^y W^w
     # with x,y in [0,n), w in [0,phi(p)).
@@ -186,6 +150,7 @@ struct EncodedPolynomial(Movable):
     var phi_p_degree: Int
     var q_modulus: UInt32
     var barrett_ratio: UInt64
+    var is_w_ntt: Bool
 
     fn __init__(out self, n_dim: Int, p_power_of_3: Int, q_modulus: UInt32):
         self.n_dim = n_dim
@@ -197,6 +162,7 @@ struct EncodedPolynomial(Movable):
             length=n_dim * n_dim * self.phi_p_degree,
             fill=0,
         )
+        self.is_w_ntt = False
 
     fn _index(self, x_index: Int, y_index: Int, w_index: Int) -> Int:
         return (
@@ -208,13 +174,11 @@ struct EncodedPolynomial(Movable):
     fn set_coefficient(
         mut self, x_index: Int, y_index: Int, w_index: Int, value: Int
     ):
-        self.coefficient_values[
-            self._index(x_index, y_index, w_index)
-        ] = _normalize_modulus(Int64(value), self.q_modulus)
+        self.coefficient_values[self._index(x_index, y_index, w_index)] = (
+            _normalize_modulus(Int64(value), self.q_modulus)
+        )
 
-    fn get_coefficient(
-        self, x_index: Int, y_index: Int, w_index: Int
-    ) -> UInt32:
+    fn get_coefficient(self, x_index: Int, y_index: Int, w_index: Int) -> UInt32:
         return self.coefficient_values[self._index(x_index, y_index, w_index)]
 
     fn get_w_polynomial(self, x_index: Int, y_index: Int) -> List[UInt32]:
@@ -234,12 +198,50 @@ struct EncodedPolynomial(Movable):
     ):
         var base_index = self._index(x_index, y_index, 0)
         for coefficient_index in range(self.phi_p_degree):
-            self.coefficient_values[
-                base_index + coefficient_index
-            ] = coefficient_values[coefficient_index]
+            self.coefficient_values[base_index + coefficient_index] = (
+                coefficient_values[coefficient_index]
+            )
+
+    fn transform_w_to_ntt(mut self):
+        if self.is_w_ntt:
+            return
+
+        var root_p = UInt32(
+            find_primitive_root(
+                UInt64(self.q_modulus), UInt64(self.p_power_of_3)
+            )
+        )
+        if root_p == 0:
+            return
+
+        var m_parameter = self.p_power_of_3 // 3
+        var number_of_slices = self.n_dim * self.n_dim
+        for slice_index in range(number_of_slices):
+            var slice_base_offset = slice_index * self.phi_p_degree
+            apply_cyclotomic_pruned_ntt(
+                self.coefficient_values,
+                m_parameter,
+                root_p,
+                self.q_modulus,
+                1,
+                slice_base_offset,
+            )
+        self.is_w_ntt = True
 
     fn apply_rhs_automorphism(mut self) -> EncodedPolynomial:
         # Computes b'(X,Y,W)=b(X^{-1},Y,W^{-1}) in coefficient form.
+        # This must be applied before W-NTT conversion.
+        if self.is_w_ntt:
+            var copy_value = EncodedPolynomial(
+                self.n_dim, self.p_power_of_3, self.q_modulus
+            )
+            for coefficient_index in range(len(self.coefficient_values)):
+                copy_value.coefficient_values[coefficient_index] = (
+                    self.coefficient_values[coefficient_index]
+                )
+            copy_value.is_w_ntt = True
+            return copy_value^
+
         var transformed_value = EncodedPolynomial(
             self.n_dim, self.p_power_of_3, self.q_modulus
         )
@@ -259,12 +261,14 @@ struct EncodedPolynomial(Movable):
                 )
         return transformed_value^
 
-    fn trace_multiply(
-        mut self, mut rhs: EncodedPolynomial
-    ) -> EncodedPolynomial:
-        # Computes c = Tr_Z(a(X,Z,W) * b(Y^{-1},Z^{-1},W^{-1}))
-        # as matrix multiplication over R^(p): C = A * (B')^T.
+    fn trace_multiply(mut self, mut rhs: EncodedPolynomial) -> EncodedPolynomial:
+        # Computes c = Tr_Z(a(X,Z,W) * b(Y^{-1},Z^{-1},W^{-1})).
+        # Uses existing W-axis NTT pipeline and returns c in W-NTT domain.
         var rhs_prime = rhs.apply_rhs_automorphism()
+
+        self.transform_w_to_ntt()
+        rhs_prime.transform_w_to_ntt()
+
         var result_value = EncodedPolynomial(
             self.n_dim, self.p_power_of_3, self.q_modulus
         )
@@ -282,14 +286,11 @@ struct EncodedPolynomial(Movable):
                     var right_w_coefficients = rhs_prime.get_w_polynomial(
                         column_index, inner_index
                     )
-                    var product_w_coefficients = (
-                        _multiply_w_polynomials_mod_cyclotomic(
-                            left_w_coefficients,
-                            right_w_coefficients,
-                            self.p_power_of_3,
-                            self.q_modulus,
-                            self.barrett_ratio,
-                        )
+                    var product_w_coefficients = _pointwise_w_multiply_ntt(
+                        left_w_coefficients,
+                        right_w_coefficients,
+                        self.q_modulus,
+                        self.barrett_ratio,
                     )
                     for coefficient_index in range(self.phi_p_degree):
                         accumulated_values[coefficient_index] = _add_modulus(
@@ -303,6 +304,7 @@ struct EncodedPolynomial(Movable):
                     accumulated_values,
                 )
 
+        result_value.is_w_ntt = True
         return result_value^
 
     fn scale_by_inverse_n(mut self):

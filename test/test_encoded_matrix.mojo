@@ -184,6 +184,8 @@ fn test_batched_trace_multiply_matches_direct_formula() raises:
 
     var left_value = EncodedPolynomial(n_dim, p_power_of_3, q_modulus)
     var right_value = EncodedPolynomial(n_dim, p_power_of_3, q_modulus)
+    var left_reference = EncodedPolynomial(n_dim, p_power_of_3, q_modulus)
+    var right_reference = EncodedPolynomial(n_dim, p_power_of_3, q_modulus)
 
     var left_seed = Int(q_modulus) - 31
     var right_seed = Int(q_modulus) - 47
@@ -202,7 +204,19 @@ fn test_batched_trace_multiply_matches_direct_formula() raises:
                     w_index,
                     left_seed,
                 )
+                left_reference.set_coefficient(
+                    x_index,
+                    y_index,
+                    w_index,
+                    left_seed,
+                )
                 right_value.set_coefficient(
+                    x_index,
+                    y_index,
+                    w_index,
+                    right_seed,
+                )
+                right_reference.set_coefficient(
                     x_index,
                     y_index,
                     w_index,
@@ -210,6 +224,10 @@ fn test_batched_trace_multiply_matches_direct_formula() raises:
                 )
 
     var computed_value = left_value.trace_multiply(right_value)
+    assert_true(
+        computed_value.is_w_ntt,
+        "trace_multiply() should output W-NTT-domain polynomial",
+    )
     var expected_value = EncodedPolynomial(n_dim, p_power_of_3, q_modulus)
 
     for row_index in range(n_dim):
@@ -219,7 +237,7 @@ fn test_batched_trace_multiply_matches_direct_formula() raises:
                 fill=0,
             )
             for inner_index in range(n_dim):
-                var left_coefficients = left_value.get_w_polynomial(
+                var left_coefficients = left_reference.get_w_polynomial(
                     row_index,
                     inner_index,
                 )
@@ -227,7 +245,7 @@ fn test_batched_trace_multiply_matches_direct_formula() raises:
                 # Right side uses Y^{-1} and Z^{-1}; in coefficient form
                 # this maps the first index by negation modulo n.
                 var source_x_index = (n_dim - column_index) % n_dim
-                var right_source_coefficients = right_value.get_w_polynomial(
+                var right_source_coefficients = right_reference.get_w_polynomial(
                     source_x_index,
                     inner_index,
                 )
@@ -256,8 +274,19 @@ fn test_batched_trace_multiply_matches_direct_formula() raises:
             )
 
     assert_true(
+        expected_value.is_w_ntt == False,
+        "reference should remain in coefficient domain before transform",
+    )
+    expected_value.transform_w_to_ntt()
+
+    assert_true(
+        expected_value.is_w_ntt,
+        "reference should be transformed to W-NTT before comparison",
+    )
+
+    assert_true(
         _poly_equal(computed_value, expected_value),
-        "trace_multiply() should match theorem-derived direct formula",
+        "trace_multiply() should match theorem formula in W-NTT domain",
     )
 
     print("test_batched_trace_multiply_matches_direct_formula passed.")
