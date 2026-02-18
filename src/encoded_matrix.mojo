@@ -1,10 +1,12 @@
 from collections import List
+from complex import ComplexFloat64
 from src.modular import (
     compute_barrett_ratio,
     multiply_mod_barrett,
     find_primitive_root,
 )
 from src.ntt import apply_cyclotomic_pruned_ntt
+from src.canonical_embedding import ComplexTensor3D
 
 
 fn _normalize_modulus(value: Int64, modulus_value: UInt32) -> UInt32:
@@ -303,3 +305,268 @@ struct EncodedPolynomial(Movable):
                 self.q_modulus,
                 self.barrett_ratio,
             )
+
+
+struct _ComplexPair(Movable):
+    var real_part: Float64
+    var imag_part: Float64
+
+    fn __init__(out self, real_part: Float64 = 0.0, imag_part: Float64 = 0.0):
+        self.real_part = real_part
+        self.imag_part = imag_part
+
+
+struct _ComplexPolynomial(Movable):
+    var real_values: List[Float64]
+    var imag_values: List[Float64]
+
+    fn __init__(out self, degree: Int):
+        self.real_values = List[Float64](length=degree, fill=0.0)
+        self.imag_values = List[Float64](length=degree, fill=0.0)
+
+
+fn _complex_multiply_pair(
+    left_real: Float64,
+    left_imag: Float64,
+    right_real: Float64,
+    right_imag: Float64,
+) -> _ComplexPair:
+    var left_value = ComplexFloat64(left_real, left_imag)
+    var right_value = ComplexFloat64(right_real, right_imag)
+    var result_value = left_value * right_value
+    return _ComplexPair(result_value.re, result_value.im)
+
+
+fn _complex_conjugate_pair(real_part: Float64, imag_part: Float64) -> _ComplexPair:
+    return _ComplexPair(real_part, -imag_part)
+
+
+fn _w_inverse_polynomial_complex(
+    coefficient_real_values: List[Float64],
+    coefficient_imag_values: List[Float64],
+    p_value: Int,
+) -> _ComplexPolynomial:
+    var phi_degree = len(coefficient_real_values)
+    var reduction_shift = p_value // 3
+
+    var exponent_real_values = List[Float64](length=p_value, fill=0.0)
+    var exponent_imag_values = List[Float64](length=p_value, fill=0.0)
+
+    for coefficient_index in range(phi_degree):
+        var mapped_degree = 0
+        if coefficient_index != 0:
+            mapped_degree = p_value - coefficient_index
+        exponent_real_values[mapped_degree] += coefficient_real_values[
+            coefficient_index
+        ]
+        exponent_imag_values[mapped_degree] += coefficient_imag_values[
+            coefficient_index
+        ]
+
+    var reduction_index = p_value - 1
+    while reduction_index >= phi_degree:
+        var top_real = exponent_real_values[reduction_index]
+        var top_imag = exponent_imag_values[reduction_index]
+        if top_real != 0.0 or top_imag != 0.0:
+            exponent_real_values[reduction_index] = 0.0
+            exponent_imag_values[reduction_index] = 0.0
+            var first_reduction_index = reduction_index - reduction_shift
+            var second_reduction_index = reduction_index - phi_degree
+
+            exponent_real_values[first_reduction_index] -= top_real
+            exponent_imag_values[first_reduction_index] -= top_imag
+            exponent_real_values[second_reduction_index] -= top_real
+            exponent_imag_values[second_reduction_index] -= top_imag
+        reduction_index -= 1
+
+    var output_values = _ComplexPolynomial(phi_degree)
+    for coefficient_index in range(phi_degree):
+        output_values.real_values[coefficient_index] = exponent_real_values[
+            coefficient_index
+        ]
+        output_values.imag_values[coefficient_index] = exponent_imag_values[
+            coefficient_index
+        ]
+    return output_values^
+
+
+fn _w_multiply_mod_cyclotomic_complex(
+    left_real_values: List[Float64],
+    left_imag_values: List[Float64],
+    right_real_values: List[Float64],
+    right_imag_values: List[Float64],
+    p_value: Int,
+) -> _ComplexPolynomial:
+    var phi_degree = len(left_real_values)
+    var reduction_shift = p_value // 3
+    var product_degree_bound = 2 * phi_degree - 1
+
+    var unreduced_real_values = List[Float64](
+        length=product_degree_bound,
+        fill=0.0,
+    )
+    var unreduced_imag_values = List[Float64](
+        length=product_degree_bound,
+        fill=0.0,
+    )
+
+    for left_index in range(phi_degree):
+        for right_index in range(phi_degree):
+            var product_value = _complex_multiply_pair(
+                left_real_values[left_index],
+                left_imag_values[left_index],
+                right_real_values[right_index],
+                right_imag_values[right_index],
+            )
+            var product_index = left_index + right_index
+            unreduced_real_values[product_index] += product_value.real_part
+            unreduced_imag_values[product_index] += product_value.imag_part
+
+    var reduction_index = product_degree_bound - 1
+    while reduction_index >= phi_degree:
+        var top_real = unreduced_real_values[reduction_index]
+        var top_imag = unreduced_imag_values[reduction_index]
+        if top_real != 0.0 or top_imag != 0.0:
+            unreduced_real_values[reduction_index] = 0.0
+            unreduced_imag_values[reduction_index] = 0.0
+            var first_reduction_index = reduction_index - reduction_shift
+            var second_reduction_index = reduction_index - phi_degree
+
+            unreduced_real_values[first_reduction_index] -= top_real
+            unreduced_imag_values[first_reduction_index] -= top_imag
+            unreduced_real_values[second_reduction_index] -= top_real
+            unreduced_imag_values[second_reduction_index] -= top_imag
+        reduction_index -= 1
+
+    var output_values = _ComplexPolynomial(phi_degree)
+    for coefficient_index in range(phi_degree):
+        output_values.real_values[coefficient_index] = unreduced_real_values[
+            coefficient_index
+        ]
+        output_values.imag_values[coefficient_index] = unreduced_imag_values[
+            coefficient_index
+        ]
+    return output_values^
+
+
+fn _rhs_automorphism_for_trace_complex(
+    encoded_tensor: ComplexTensor3D,
+    n_dim: Int,
+    p_value: Int,
+    phi_degree: Int,
+) -> ComplexTensor3D:
+    var output_tensor = ComplexTensor3D(n_dim, n_dim, phi_degree)
+
+    for x_index in range(n_dim):
+        var mapped_x_index = (n_dim - x_index) % n_dim
+        for y_index in range(n_dim):
+            var temp_real_values = List[Float64](length=phi_degree, fill=0.0)
+            var temp_imag_values = List[Float64](length=phi_degree, fill=0.0)
+            for w_index in range(phi_degree):
+                var conjugated_value = _complex_conjugate_pair(
+                    encoded_tensor.get_real(x_index, y_index, w_index),
+                    encoded_tensor.get_imag(x_index, y_index, w_index),
+                )
+                var mapped_real = conjugated_value.real_part
+                var mapped_imag = conjugated_value.imag_part
+                if x_index != 0:
+                    var multiplied = _complex_multiply_pair(
+                        mapped_real,
+                        mapped_imag,
+                        0.0,
+                        -1.0,
+                    )
+                    mapped_real = multiplied.real_part
+                    mapped_imag = multiplied.imag_part
+                temp_real_values[w_index] = mapped_real
+                temp_imag_values[w_index] = mapped_imag
+
+            var mapped_w_values = _w_inverse_polynomial_complex(
+                temp_real_values,
+                temp_imag_values,
+                p_value,
+            )
+            for w_index in range(phi_degree):
+                output_tensor.set(
+                    mapped_x_index,
+                    y_index,
+                    w_index,
+                    mapped_w_values.real_values[w_index],
+                    mapped_w_values.imag_values[w_index],
+                )
+    return output_tensor^
+
+
+fn trace_multiply_encoded_complex(
+    encoded_left: ComplexTensor3D,
+    encoded_right: ComplexTensor3D,
+    n_dim: Int,
+    p_value: Int,
+    phi_degree: Int,
+) -> ComplexTensor3D:
+    # Computes c = Tr_Z(a(X,Z,W) * conjugate(b)(Y^{-1},Z^{-1},W^{-1}))
+    # on encoded coefficient tensors in C.
+    var rhs_prime = _rhs_automorphism_for_trace_complex(
+        encoded_right,
+        n_dim,
+        p_value,
+        phi_degree,
+    )
+    var output_tensor = ComplexTensor3D(n_dim, n_dim, phi_degree)
+
+    for row_index in range(n_dim):
+        for col_index in range(n_dim):
+            var acc_real_values = List[Float64](length=phi_degree, fill=0.0)
+            var acc_imag_values = List[Float64](length=phi_degree, fill=0.0)
+            for inner_index in range(n_dim):
+                var left_real_values = List[Float64](length=phi_degree, fill=0.0)
+                var left_imag_values = List[Float64](length=phi_degree, fill=0.0)
+                var right_real_values = List[Float64](length=phi_degree, fill=0.0)
+                var right_imag_values = List[Float64](length=phi_degree, fill=0.0)
+
+                for w_index in range(phi_degree):
+                    left_real_values[w_index] = encoded_left.get_real(
+                        row_index,
+                        inner_index,
+                        w_index,
+                    )
+                    left_imag_values[w_index] = encoded_left.get_imag(
+                        row_index,
+                        inner_index,
+                        w_index,
+                    )
+                    right_real_values[w_index] = rhs_prime.get_real(
+                        col_index,
+                        inner_index,
+                        w_index,
+                    )
+                    right_imag_values[w_index] = rhs_prime.get_imag(
+                        col_index,
+                        inner_index,
+                        w_index,
+                    )
+
+                var product_values = _w_multiply_mod_cyclotomic_complex(
+                    left_real_values,
+                    left_imag_values,
+                    right_real_values,
+                    right_imag_values,
+                    p_value,
+                )
+                for w_index in range(phi_degree):
+                    acc_real_values[w_index] += product_values.real_values[
+                        w_index
+                    ]
+                    acc_imag_values[w_index] += product_values.imag_values[
+                        w_index
+                    ]
+
+            for w_index in range(phi_degree):
+                output_tensor.set(
+                    row_index,
+                    col_index,
+                    w_index,
+                    acc_real_values[w_index],
+                    acc_imag_values[w_index],
+                )
+    return output_tensor^
