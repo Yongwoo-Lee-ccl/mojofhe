@@ -458,35 +458,7 @@ fn test_trace_matmul_matches_naive_complex_matmul() raises:
         round_to_gaussian_integer=False,
     )
 
-    # 1) Encode/decode roundtrip check.
-    var decoded_a = decode_canonical_complex(encoded_a, context, 1.0)
-    var decoded_b = decode_canonical_complex(encoded_b, context, 1.0)
-    var roundtrip_tolerance = 1e-6
-    for row_index in range(n_dim):
-        for col_index in range(n_dim):
-            for batch_index in range(context.phi_p_degree):
-                assert_true(
-                    _complex_close(
-                        matrix_a.get_real(row_index, col_index, batch_index),
-                        matrix_a.get_imag(row_index, col_index, batch_index),
-                        decoded_a.get_real(row_index, col_index, batch_index),
-                        decoded_a.get_imag(row_index, col_index, batch_index),
-                        roundtrip_tolerance,
-                    ),
-                    "encode/decode should preserve matrix A",
-                )
-                assert_true(
-                    _complex_close(
-                        matrix_b.get_real(row_index, col_index, batch_index),
-                        matrix_b.get_imag(row_index, col_index, batch_index),
-                        decoded_b.get_real(row_index, col_index, batch_index),
-                        decoded_b.get_imag(row_index, col_index, batch_index),
-                        roundtrip_tolerance,
-                    ),
-                    "encode/decode should preserve matrix B",
-                )
-
-    # 2) encode -> trace-matmul -> decode matches naive A * B* in C.
+    # encode -> trace-matmul -> decode matches naive A * B* in C.
     var trace_product_encoded = _trace_multiply_encoded_polynomials(
         encoded_a,
         encoded_b,
@@ -544,6 +516,67 @@ fn test_trace_matmul_matches_naive_complex_matmul() raises:
                 )
 
     print("test_trace_matmul_matches_naive_complex_matmul passed.")
+
+
+fn test_encode_decode_roundtrip_for_matmul_inputs() raises:
+    print("Running test_encode_decode_roundtrip_for_matmul_inputs...")
+
+    var n_dim = 4
+    var p_value = 9
+    var context = CanonicalEmbeddingContext(n_dim, p_value)
+
+    var matrix_a = _make_input_tensor_with_offset(
+        n_dim,
+        context.phi_p_degree,
+        2,
+    )
+    var matrix_b = _make_input_tensor_with_offset(
+        n_dim,
+        context.phi_p_degree,
+        9,
+    )
+
+    var encoded_a = encode_canonical_complex(
+        matrix_a,
+        context,
+        1.0,
+        round_to_gaussian_integer=False,
+    )
+    var encoded_b = encode_canonical_complex(
+        matrix_b,
+        context,
+        1.0,
+        round_to_gaussian_integer=False,
+    )
+    var decoded_a = decode_canonical_complex(encoded_a, context, 1.0)
+    var decoded_b = decode_canonical_complex(encoded_b, context, 1.0)
+
+    var roundtrip_tolerance = 1e-6
+    for row_index in range(n_dim):
+        for col_index in range(n_dim):
+            for batch_index in range(context.phi_p_degree):
+                assert_true(
+                    _complex_close(
+                        matrix_a.get_real(row_index, col_index, batch_index),
+                        matrix_a.get_imag(row_index, col_index, batch_index),
+                        decoded_a.get_real(row_index, col_index, batch_index),
+                        decoded_a.get_imag(row_index, col_index, batch_index),
+                        roundtrip_tolerance,
+                    ),
+                    "encode/decode should preserve matrix A",
+                )
+                assert_true(
+                    _complex_close(
+                        matrix_b.get_real(row_index, col_index, batch_index),
+                        matrix_b.get_imag(row_index, col_index, batch_index),
+                        decoded_b.get_real(row_index, col_index, batch_index),
+                        decoded_b.get_imag(row_index, col_index, batch_index),
+                        roundtrip_tolerance,
+                    ),
+                    "encode/decode should preserve matrix B",
+                )
+
+    print("test_encode_decode_roundtrip_for_matmul_inputs passed.")
 
 
 fn main() raises:
