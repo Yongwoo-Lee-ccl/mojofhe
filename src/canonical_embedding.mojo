@@ -1,21 +1,6 @@
 from collections import List
-from complex import ComplexFloat64
 from math import cos, sin, pi
-
-
-struct ComplexPair(Copyable, Movable):
-    var real_part: Float64
-    var imag_part: Float64
-
-    fn __init__(out self, real_part: Float64 = 0.0, imag_part: Float64 = 0.0):
-        self.real_part = real_part
-        self.imag_part = imag_part
-
-
-fn _abs_f64(value: Float64) -> Float64:
-    if value < 0.0:
-        return -value
-    return value
+from src.complex_utils import ComplexPair, complex_multiply_pair, complex_divide_pair
 
 
 fn _round_nearest(value: Float64) -> Int:
@@ -49,35 +34,6 @@ fn _gcd(value_a: Int, value_b: Int) -> Int:
     return a
 
 
-fn _complex_multiply(
-    left_real: Float64,
-    left_imag: Float64,
-    right_real: Float64,
-    right_imag: Float64,
-) -> ComplexPair:
-    var left_value = ComplexFloat64(left_real, left_imag)
-    var right_value = ComplexFloat64(right_real, right_imag)
-    var result_value = left_value * right_value
-    return ComplexPair(result_value.re, result_value.im)
-
-
-fn _complex_divide(
-    numerator_real: Float64,
-    numerator_imag: Float64,
-    denominator_real: Float64,
-    denominator_imag: Float64,
-) -> ComplexPair:
-    var denominator_abs_squared = denominator_real * denominator_real + (
-        denominator_imag * denominator_imag
-    )
-    if denominator_abs_squared == 0.0:
-        return ComplexPair()
-    var numerator_value = ComplexFloat64(numerator_real, numerator_imag)
-    var denominator_value = ComplexFloat64(denominator_real, denominator_imag)
-    var result_value = numerator_value / denominator_value
-    return ComplexPair(result_value.re, result_value.im)
-
-
 fn _complex_pow(
     base_real: Float64,
     base_imag: Float64,
@@ -90,7 +46,7 @@ fn _complex_pow(
 
     for exponent_index in range(exponent_value):
         _ = exponent_index
-        var next_value = _complex_multiply(
+        var next_value = complex_multiply_pair(
             result_real,
             result_imag,
             base_real,
@@ -197,7 +153,7 @@ fn _build_vandermonde(
                 current_real,
                 current_imag,
             )
-            var next_value = _complex_multiply(
+            var next_value = complex_multiply_pair(
                 current_real,
                 current_imag,
                 root_real_values[row_index],
@@ -285,7 +241,7 @@ fn _invert_square_matrix(input_matrix: ComplexMatrix, dimension: Int) -> Complex
         var pivot_real = left_matrix.get_real(pivot_index, pivot_index)
         var pivot_imag = left_matrix.get_imag(pivot_index, pivot_index)
         for column_index in range(dimension):
-            var left_value = _complex_divide(
+            var left_value = complex_divide_pair(
                 left_matrix.get_real(pivot_index, column_index),
                 left_matrix.get_imag(pivot_index, column_index),
                 pivot_real,
@@ -298,7 +254,7 @@ fn _invert_square_matrix(input_matrix: ComplexMatrix, dimension: Int) -> Complex
                 left_value.imag_part,
             )
 
-            var right_value = _complex_divide(
+            var right_value = complex_divide_pair(
                 right_matrix.get_real(pivot_index, column_index),
                 right_matrix.get_imag(pivot_index, column_index),
                 pivot_real,
@@ -317,7 +273,7 @@ fn _invert_square_matrix(input_matrix: ComplexMatrix, dimension: Int) -> Complex
             var elimination_real = left_matrix.get_real(row_index, pivot_index)
             var elimination_imag = left_matrix.get_imag(row_index, pivot_index)
             for column_index in range(dimension):
-                var left_product = _complex_multiply(
+                var left_product = complex_multiply_pair(
                     elimination_real,
                     elimination_imag,
                     left_matrix.get_real(pivot_index, column_index),
@@ -332,7 +288,7 @@ fn _invert_square_matrix(input_matrix: ComplexMatrix, dimension: Int) -> Complex
                     - left_product.imag_part,
                 )
 
-                var right_product = _complex_multiply(
+                var right_product = complex_multiply_pair(
                     elimination_real,
                     elimination_imag,
                     right_matrix.get_real(pivot_index, column_index),
@@ -446,7 +402,7 @@ fn _apply_separable_transform(
                 var accum_real = 0.0
                 var accum_imag = 0.0
                 for input_x in range(input_tensor.dim_x):
-                    var product_value = _complex_multiply(
+                    var product_value = complex_multiply_pair(
                         matrix_x.get_real(output_x, input_x),
                         matrix_x.get_imag(output_x, input_x),
                         input_tensor.get_real(input_x, y_index, w_index),
@@ -467,7 +423,7 @@ fn _apply_separable_transform(
                 var accum_real = 0.0
                 var accum_imag = 0.0
                 for input_y in range(input_tensor.dim_y):
-                    var product_value = _complex_multiply(
+                    var product_value = complex_multiply_pair(
                         matrix_y.get_real(output_y, input_y),
                         matrix_y.get_imag(output_y, input_y),
                         stage_x.get_real(x_index, input_y, w_index),
@@ -483,7 +439,7 @@ fn _apply_separable_transform(
                 var accum_real = 0.0
                 var accum_imag = 0.0
                 for input_w in range(input_tensor.dim_z):
-                    var product_value = _complex_multiply(
+                    var product_value = complex_multiply_pair(
                         matrix_w.get_real(output_w, input_w),
                         matrix_w.get_imag(output_w, input_w),
                         stage_y.get_real(x_index, y_index, input_w),

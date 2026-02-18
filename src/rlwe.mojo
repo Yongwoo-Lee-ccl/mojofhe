@@ -1,14 +1,7 @@
 from collections import List
 from src.modular import compute_barrett_ratio, multiply_mod_barrett
 from src.polynomial import Polynomial
-
-
-fn _normalize_modulus(value: Int64, modulus_value: UInt32) -> UInt32:
-    var modulus_int64 = Int64(modulus_value)
-    var reduced_value = value % modulus_int64
-    if reduced_value < 0:
-        reduced_value += modulus_int64
-    return UInt32(reduced_value)
+from src.number_theory_utils import normalize_modulus_i64
 
 
 fn _poly_add_modulus(
@@ -37,7 +30,7 @@ fn _poly_subtract_modulus(
         var difference_value = Int64(left_values[coefficient_index]) - Int64(
             right_values[coefficient_index]
         )
-        result_values[coefficient_index] = _normalize_modulus(
+        result_values[coefficient_index] = normalize_modulus_i64(
             difference_value, modulus_value
         )
     return result_values^

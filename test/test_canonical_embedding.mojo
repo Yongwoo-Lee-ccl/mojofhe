@@ -1,26 +1,17 @@
 from testing import TestSuite, assert_true
-from complex import ComplexFloat64
 from src.canonical_embedding import (
     ComplexTensor3D,
     CanonicalEmbeddingContext,
     encode_canonical_complex,
     decode_canonical_complex,
 )
+from src.complex_utils import (
+    ComplexPair,
+    complex_close_values,
+    complex_conjugate_pair,
+    complex_multiply_pair,
+)
 from src.encoded_matrix import trace_multiply_encoded_complex
-
-struct ComplexPair(Copyable, Movable):
-    var real_part: Float64
-    var imag_part: Float64
-
-    fn __init__(out self, real_part: Float64 = 0.0, imag_part: Float64 = 0.0):
-        self.real_part = real_part
-        self.imag_part = imag_part
-
-
-fn _abs_f64(value: Float64) -> Float64:
-    if value < 0.0:
-        return -value
-    return value
 
 
 fn _complex_close(
@@ -30,9 +21,12 @@ fn _complex_close(
     right_imag: Float64,
     tolerance: Float64,
 ) -> Bool:
-    return (
-        _abs_f64(left_real - right_real) <= tolerance
-        and _abs_f64(left_imag - right_imag) <= tolerance
+    return complex_close_values(
+        left_real,
+        left_imag,
+        right_real,
+        right_imag,
+        tolerance,
     )
 
 
@@ -91,14 +85,16 @@ fn _complex_multiply(
     right_real: Float64,
     right_imag: Float64,
 ) -> ComplexPair:
-    var left_value = ComplexFloat64(left_real, left_imag)
-    var right_value = ComplexFloat64(right_real, right_imag)
-    var result_value = left_value * right_value
-    return ComplexPair(result_value.re, result_value.im)
+    return complex_multiply_pair(
+        left_real,
+        left_imag,
+        right_real,
+        right_imag,
+    )
 
 
 fn _complex_conjugate(real_part: Float64, imag_part: Float64) -> ComplexPair:
-    return ComplexPair(real_part, -imag_part)
+    return complex_conjugate_pair(real_part, imag_part)
 
 
 fn test_canonical_embedding_roundtrip_without_rounding() raises:

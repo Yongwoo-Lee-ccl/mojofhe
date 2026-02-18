@@ -1,5 +1,4 @@
 from collections import List
-from complex import ComplexFloat64
 from src.modular import (
     compute_barrett_ratio,
     multiply_mod_barrett,
@@ -7,14 +6,8 @@ from src.modular import (
 )
 from src.ntt import apply_cyclotomic_pruned_ntt
 from src.canonical_embedding import ComplexTensor3D
-
-
-fn _normalize_modulus(value: Int64, modulus_value: UInt32) -> UInt32:
-    var modulus_int64 = Int64(modulus_value)
-    var reduced_value = value % modulus_int64
-    if reduced_value < 0:
-        reduced_value += modulus_int64
-    return UInt32(reduced_value)
+from src.complex_utils import complex_multiply_pair, complex_conjugate_pair
+from src.number_theory_utils import normalize_modulus_i64, mod_inverse_int64
 
 
 fn _add_modulus(
@@ -24,38 +17,6 @@ fn _add_modulus(
     if summed_value >= modulus_value:
         summed_value -= modulus_value
     return summed_value
-
-
-fn _mod_inverse(value: UInt32, modulus_value: UInt32) -> UInt32:
-    var normalized_value = Int64(value % modulus_value)
-    var modulus_int64 = Int64(modulus_value)
-
-    var previous_remainder = modulus_int64
-    var current_remainder = normalized_value
-    var previous_coefficient: Int64 = 0
-    var current_coefficient: Int64 = 1
-
-    while current_remainder != 0:
-        var quotient_value = previous_remainder // current_remainder
-        var next_remainder = (
-            previous_remainder - quotient_value * current_remainder
-        )
-        previous_remainder = current_remainder
-        current_remainder = next_remainder
-
-        var next_coefficient = (
-            previous_coefficient - quotient_value * current_coefficient
-        )
-        previous_coefficient = current_coefficient
-        current_coefficient = next_coefficient
-
-    if previous_remainder != 1:
-        return 0
-
-    var normalized_coefficient = previous_coefficient % modulus_int64
-    if normalized_coefficient < 0:
-        normalized_coefficient += modulus_int64
-    return UInt32(normalized_coefficient)
 
 
 fn _apply_w_inverse_automorphism(
@@ -87,12 +48,12 @@ fn _apply_w_inverse_automorphism(
             exponent_space_values[reduction_index] = 0
             var first_reduction_index = reduction_index - reduction_shift
             var second_reduction_index = reduction_index - phi_degree
-            exponent_space_values[first_reduction_index] = _normalize_modulus(
+            exponent_space_values[first_reduction_index] = normalize_modulus_i64(
                 Int64(exponent_space_values[first_reduction_index])
                 - Int64(top_coefficient),
                 modulus_value,
             )
-            exponent_space_values[second_reduction_index] = _normalize_modulus(
+            exponent_space_values[second_reduction_index] = normalize_modulus_i64(
                 Int64(exponent_space_values[second_reduction_index])
                 - Int64(top_coefficient),
                 modulus_value,
@@ -159,7 +120,7 @@ struct EncodedPolynomial(Movable):
     ):
         self.coefficient_values[
             self._index(x_index, y_index, w_index)
-        ] = _normalize_modulus(Int64(value), self.q_modulus)
+        ] = normalize_modulus_i64(Int64(value), self.q_modulus)
 
     fn get_coefficient(
         self, x_index: Int, y_index: Int, w_index: Int
@@ -295,9 +256,12 @@ struct EncodedPolynomial(Movable):
         return result_value^
 
     fn scale_by_inverse_n(mut self):
-        var n_inverse = _mod_inverse(UInt32(self.n_dim), self.q_modulus)
-        if n_inverse == 0:
+        var n_inverse_int64 = mod_inverse_int64(
+            UInt32(self.n_dim), self.q_modulus
+        )
+        if n_inverse_int64 < 0:
             return
+        var n_inverse = UInt32(UInt64(n_inverse_int64))
         for coefficient_index in range(len(self.coefficient_values)):
             self.coefficient_values[coefficient_index] = multiply_mod_barrett(
                 self.coefficient_values[coefficient_index],
@@ -307,15 +271,6 @@ struct EncodedPolynomial(Movable):
             )
 
 
-struct _ComplexPair(Movable):
-    var real_part: Float64
-    var imag_part: Float64
-
-    fn __init__(out self, real_part: Float64 = 0.0, imag_part: Float64 = 0.0):
-        self.real_part = real_part
-        self.imag_part = imag_part
-
-
 struct _ComplexPolynomial(Movable):
     var real_values: List[Float64]
     var imag_values: List[Float64]
@@ -323,22 +278,6 @@ struct _ComplexPolynomial(Movable):
     fn __init__(out self, degree: Int):
         self.real_values = List[Float64](length=degree, fill=0.0)
         self.imag_values = List[Float64](length=degree, fill=0.0)
-
-
-fn _complex_multiply_pair(
-    left_real: Float64,
-    left_imag: Float64,
-    right_real: Float64,
-    right_imag: Float64,
-) -> _ComplexPair:
-    var left_value = ComplexFloat64(left_real, left_imag)
-    var right_value = ComplexFloat64(right_real, right_imag)
-    var result_value = left_value * right_value
-    return _ComplexPair(result_value.re, result_value.im)
-
-
-fn _complex_conjugate_pair(real_part: Float64, imag_part: Float64) -> _ComplexPair:
-    return _ComplexPair(real_part, -imag_part)
 
 
 fn _w_inverse_polynomial_complex(
@@ -412,7 +351,7 @@ fn _w_multiply_mod_cyclotomic_complex(
 
     for left_index in range(phi_degree):
         for right_index in range(phi_degree):
-            var product_value = _complex_multiply_pair(
+            var product_value = complex_multiply_pair(
                 left_real_values[left_index],
                 left_imag_values[left_index],
                 right_real_values[right_index],
@@ -463,14 +402,14 @@ fn _rhs_automorphism_for_trace_complex(
             var temp_real_values = List[Float64](length=phi_degree, fill=0.0)
             var temp_imag_values = List[Float64](length=phi_degree, fill=0.0)
             for w_index in range(phi_degree):
-                var conjugated_value = _complex_conjugate_pair(
+                var conjugated_value = complex_conjugate_pair(
                     encoded_tensor.get_real(x_index, y_index, w_index),
                     encoded_tensor.get_imag(x_index, y_index, w_index),
                 )
                 var mapped_real = conjugated_value.real_part
                 var mapped_imag = conjugated_value.imag_part
                 if x_index != 0:
-                    var multiplied = _complex_multiply_pair(
+                    var multiplied = complex_multiply_pair(
                         mapped_real,
                         mapped_imag,
                         0.0,
