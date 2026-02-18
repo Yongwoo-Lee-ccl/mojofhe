@@ -24,25 +24,6 @@ fn _add_modulus(
     return summed_value
 
 
-fn _subtract_modulus(
-    left_value: UInt32, right_value: UInt32, modulus_value: UInt32
-) -> UInt32:
-    return _normalize_modulus(
-        Int64(left_value) - Int64(right_value), modulus_value
-    )
-
-
-fn _multiply_modulus(
-    left_value: UInt32,
-    right_value: UInt32,
-    modulus_value: UInt32,
-    barrett_ratio: UInt64,
-) -> UInt32:
-    return multiply_mod_barrett(
-        left_value, right_value, modulus_value, barrett_ratio
-    )
-
-
 fn _mod_inverse(value: UInt32, modulus_value: UInt32) -> UInt32:
     var normalized_value = Int64(value % modulus_value)
     var modulus_int64 = Int64(modulus_value)
@@ -104,14 +85,14 @@ fn _apply_w_inverse_automorphism(
             exponent_space_values[reduction_index] = 0
             var first_reduction_index = reduction_index - reduction_shift
             var second_reduction_index = reduction_index - phi_degree
-            exponent_space_values[first_reduction_index] = _subtract_modulus(
-                exponent_space_values[first_reduction_index],
-                top_coefficient,
+            exponent_space_values[first_reduction_index] = _normalize_modulus(
+                Int64(exponent_space_values[first_reduction_index])
+                - Int64(top_coefficient),
                 modulus_value,
             )
-            exponent_space_values[second_reduction_index] = _subtract_modulus(
-                exponent_space_values[second_reduction_index],
-                top_coefficient,
+            exponent_space_values[second_reduction_index] = _normalize_modulus(
+                Int64(exponent_space_values[second_reduction_index])
+                - Int64(top_coefficient),
                 modulus_value,
             )
         reduction_index -= 1
@@ -132,7 +113,7 @@ fn _pointwise_w_multiply_ntt(
 ) -> List[UInt32]:
     var product_values = List[UInt32](length=len(left_values), fill=0)
     for coefficient_index in range(len(left_values)):
-        product_values[coefficient_index] = _multiply_modulus(
+        product_values[coefficient_index] = multiply_mod_barrett(
             left_values[coefficient_index],
             right_values[coefficient_index],
             modulus_value,
@@ -174,11 +155,13 @@ struct EncodedPolynomial(Movable):
     fn set_coefficient(
         mut self, x_index: Int, y_index: Int, w_index: Int, value: Int
     ):
-        self.coefficient_values[self._index(x_index, y_index, w_index)] = (
-            _normalize_modulus(Int64(value), self.q_modulus)
-        )
+        self.coefficient_values[
+            self._index(x_index, y_index, w_index)
+        ] = _normalize_modulus(Int64(value), self.q_modulus)
 
-    fn get_coefficient(self, x_index: Int, y_index: Int, w_index: Int) -> UInt32:
+    fn get_coefficient(
+        self, x_index: Int, y_index: Int, w_index: Int
+    ) -> UInt32:
         return self.coefficient_values[self._index(x_index, y_index, w_index)]
 
     fn get_w_polynomial(self, x_index: Int, y_index: Int) -> List[UInt32]:
@@ -198,9 +181,9 @@ struct EncodedPolynomial(Movable):
     ):
         var base_index = self._index(x_index, y_index, 0)
         for coefficient_index in range(self.phi_p_degree):
-            self.coefficient_values[base_index + coefficient_index] = (
-                coefficient_values[coefficient_index]
-            )
+            self.coefficient_values[
+                base_index + coefficient_index
+            ] = coefficient_values[coefficient_index]
 
     fn transform_w_to_ntt(mut self):
         if self.is_w_ntt:
@@ -236,9 +219,9 @@ struct EncodedPolynomial(Movable):
                 self.n_dim, self.p_power_of_3, self.q_modulus
             )
             for coefficient_index in range(len(self.coefficient_values)):
-                copy_value.coefficient_values[coefficient_index] = (
-                    self.coefficient_values[coefficient_index]
-                )
+                copy_value.coefficient_values[
+                    coefficient_index
+                ] = self.coefficient_values[coefficient_index]
             copy_value.is_w_ntt = True
             return copy_value^
 
@@ -261,7 +244,9 @@ struct EncodedPolynomial(Movable):
                 )
         return transformed_value^
 
-    fn trace_multiply(mut self, mut rhs: EncodedPolynomial) -> EncodedPolynomial:
+    fn trace_multiply(
+        mut self, mut rhs: EncodedPolynomial
+    ) -> EncodedPolynomial:
         # Computes c = Tr_Z(a(X,Z,W) * b(Y^{-1},Z^{-1},W^{-1})).
         # Uses existing W-axis NTT pipeline and returns c in W-NTT domain.
         var rhs_prime = rhs.apply_rhs_automorphism()
@@ -312,7 +297,7 @@ struct EncodedPolynomial(Movable):
         if n_inverse == 0:
             return
         for coefficient_index in range(len(self.coefficient_values)):
-            self.coefficient_values[coefficient_index] = _multiply_modulus(
+            self.coefficient_values[coefficient_index] = multiply_mod_barrett(
                 self.coefficient_values[coefficient_index],
                 n_inverse,
                 self.q_modulus,

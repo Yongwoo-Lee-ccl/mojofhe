@@ -245,9 +245,11 @@ fn test_batched_trace_multiply_matches_direct_formula() raises:
                 # Right side uses Y^{-1} and Z^{-1}; in coefficient form
                 # this maps the first index by negation modulo n.
                 var source_x_index = (n_dim - column_index) % n_dim
-                var right_source_coefficients = right_reference.get_w_polynomial(
-                    source_x_index,
-                    inner_index,
+                var right_source_coefficients = (
+                    right_reference.get_w_polynomial(
+                        source_x_index,
+                        inner_index,
+                    )
                 )
                 var right_mapped_coefficients = _w_inverse_reference(
                     right_source_coefficients,
