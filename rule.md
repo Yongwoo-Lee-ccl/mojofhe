@@ -22,3 +22,8 @@ If you are adding a new feature, you must also add corresponding tests.
 
 ## 4. Variable Naming
 All variable names should be self-explaining. Do not use single-letter variable names like `a`, `b`, or even `i` for indexing. Instead, use descriptive names like `slot_index`.
+
+## 5. DRY (Do Not Repeat Yourself)
+Avoid re-implementing existing logic. Before adding new helper functions, check whether equivalent functions already exist in `src/` and reuse them.
+
+If duplicate logic is discovered during review, refactor to a shared function/module rather than keeping multiple copies.
