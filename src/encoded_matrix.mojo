@@ -220,30 +220,36 @@ struct EncodedPolynomial(Movable):
         var result_value = EncodedPolynomial(
             self.n_dim, self.p_power_of_3, self.q_modulus
         )
+        var n_dim = self.n_dim
+        var phi_degree = self.phi_p_degree
 
-        for row_index in range(self.n_dim):
-            for column_index in range(self.n_dim):
+        for row_index in range(n_dim):
+            var left_row_base = row_index * n_dim * phi_degree
+            for column_index in range(n_dim):
+                var right_row_base = column_index * n_dim * phi_degree
                 var accumulated_values = List[UInt32](
-                    length=self.phi_p_degree,
+                    length=phi_degree,
                     fill=0,
                 )
-                for inner_index in range(self.n_dim):
-                    var left_w_coefficients = self.get_w_polynomial(
-                        row_index, inner_index
+                for inner_index in range(n_dim):
+                    var left_lane_base = left_row_base + inner_index * phi_degree
+                    var right_lane_base = (
+                        right_row_base + inner_index * phi_degree
                     )
-                    var right_w_coefficients = rhs_prime.get_w_polynomial(
-                        column_index, inner_index
-                    )
-                    var product_w_coefficients = _pointwise_w_multiply_ntt(
-                        left_w_coefficients,
-                        right_w_coefficients,
-                        self.q_modulus,
-                        self.barrett_ratio,
-                    )
-                    for coefficient_index in range(self.phi_p_degree):
+                    for coefficient_index in range(phi_degree):
+                        var product_value = multiply_mod_barrett(
+                            self.coefficient_values[
+                                left_lane_base + coefficient_index
+                            ],
+                            rhs_prime.coefficient_values[
+                                right_lane_base + coefficient_index
+                            ],
+                            self.q_modulus,
+                            self.barrett_ratio,
+                        )
                         accumulated_values[coefficient_index] = _add_modulus(
                             accumulated_values[coefficient_index],
-                            product_w_coefficients[coefficient_index],
+                            product_value,
                             self.q_modulus,
                         )
                 result_value.set_w_polynomial(
