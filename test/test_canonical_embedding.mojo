@@ -1,4 +1,5 @@
 from testing import TestSuite, assert_true
+from complex import ComplexFloat64
 from src.canonical_embedding import (
     ComplexTensor3D,
     CanonicalEmbeddingContext,
@@ -98,10 +99,10 @@ fn _complex_multiply(
     right_real: Float64,
     right_imag: Float64,
 ) -> ComplexPair:
-    return ComplexPair(
-        left_real * right_real - left_imag * right_imag,
-        left_real * right_imag + left_imag * right_real,
-    )
+    var left_value = ComplexFloat64(left_real, left_imag)
+    var right_value = ComplexFloat64(right_real, right_imag)
+    var result_value = left_value * right_value
+    return ComplexPair(result_value.re, result_value.im)
 
 
 fn _complex_conjugate(real_part: Float64, imag_part: Float64) -> ComplexPair:

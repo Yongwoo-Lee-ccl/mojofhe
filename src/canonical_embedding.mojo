@@ -1,4 +1,5 @@
 from collections import List
+from complex import ComplexFloat64
 from math import cos, sin, pi
 
 
@@ -54,10 +55,10 @@ fn _complex_multiply(
     right_real: Float64,
     right_imag: Float64,
 ) -> ComplexPair:
-    return ComplexPair(
-        left_real * right_real - left_imag * right_imag,
-        left_real * right_imag + left_imag * right_real,
-    )
+    var left_value = ComplexFloat64(left_real, left_imag)
+    var right_value = ComplexFloat64(right_real, right_imag)
+    var result_value = left_value * right_value
+    return ComplexPair(result_value.re, result_value.im)
 
 
 fn _complex_divide(
@@ -66,20 +67,15 @@ fn _complex_divide(
     denominator_real: Float64,
     denominator_imag: Float64,
 ) -> ComplexPair:
-    var denominator_abs_squared = (
-        denominator_real * denominator_real + denominator_imag * denominator_imag
+    var denominator_abs_squared = denominator_real * denominator_real + (
+        denominator_imag * denominator_imag
     )
     if denominator_abs_squared == 0.0:
         return ComplexPair()
-
-    var reciprocal_real = denominator_real / denominator_abs_squared
-    var reciprocal_imag = -denominator_imag / denominator_abs_squared
-    return _complex_multiply(
-        numerator_real,
-        numerator_imag,
-        reciprocal_real,
-        reciprocal_imag,
-    )
+    var numerator_value = ComplexFloat64(numerator_real, numerator_imag)
+    var denominator_value = ComplexFloat64(denominator_real, denominator_imag)
+    var result_value = numerator_value / denominator_value
+    return ComplexPair(result_value.re, result_value.im)
 
 
 fn _complex_pow(
