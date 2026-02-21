@@ -50,34 +50,46 @@ fn _make_polynomial_from_coefficients(
     return polynomial_value^
 
 
-fn _sample_existing_uniform(
-    n_power_of_2: Int, p_power_of_3: Int, modulus_value: UInt32
+fn _sample_existing_by_distribution(
+    n_power_of_2: Int,
+    p_power_of_3: Int,
+    modulus_value: UInt32,
+    distribution_kind: Int,
 ) -> List[UInt32]:
     var sampled_polynomial = Polynomial(
         n_power_of_2, p_power_of_3, modulus_value
     )
-    sampled_polynomial.sample_uniform()
+    if distribution_kind == 0:
+        sampled_polynomial.sample_uniform()
+    elif distribution_kind == 1:
+        sampled_polynomial.sample_ternary()
+    else:
+        sampled_polynomial.sample_gaussian()
     return sampled_polynomial.coefficient_values.copy()
+
+
+fn _sample_existing_uniform(
+    n_power_of_2: Int, p_power_of_3: Int, modulus_value: UInt32
+) -> List[UInt32]:
+    return _sample_existing_by_distribution(
+        n_power_of_2, p_power_of_3, modulus_value, 0
+    )
 
 
 fn _sample_existing_ternary(
     n_power_of_2: Int, p_power_of_3: Int, modulus_value: UInt32
 ) -> List[UInt32]:
-    var sampled_polynomial = Polynomial(
-        n_power_of_2, p_power_of_3, modulus_value
+    return _sample_existing_by_distribution(
+        n_power_of_2, p_power_of_3, modulus_value, 1
     )
-    sampled_polynomial.sample_ternary()
-    return sampled_polynomial.coefficient_values.copy()
 
 
 fn _sample_existing_gaussian(
     n_power_of_2: Int, p_power_of_3: Int, modulus_value: UInt32
 ) -> List[UInt32]:
-    var sampled_polynomial = Polynomial(
-        n_power_of_2, p_power_of_3, modulus_value
+    return _sample_existing_by_distribution(
+        n_power_of_2, p_power_of_3, modulus_value, 2
     )
-    sampled_polynomial.sample_gaussian()
-    return sampled_polynomial.coefficient_values.copy()
 
 
 fn _to_ntt_with_existing_transform(
