@@ -5,16 +5,7 @@ from src.modular import (
     find_suitable_q,
     multiply_mod_barrett,
 )
-from src.encoded_matrix import EncodedPolynomial
-
-
-fn _add_modulus(
-    left_value: UInt32, right_value: UInt32, modulus_value: UInt32
-) -> UInt32:
-    var summed_value = left_value + right_value
-    if summed_value >= modulus_value:
-        summed_value -= modulus_value
-    return summed_value
+from src.encoded_matrix import EncodedPolynomial, _add_modulus
 
 
 fn _subtract_modulus(
