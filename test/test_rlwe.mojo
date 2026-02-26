@@ -8,6 +8,7 @@ from src.rlwe import (
     rlwe_decrypt_ntt,
     rlwe_ring_multiply_ntt,
     encode_binary_plaintext_ntt,
+    _poly_add_modulus,
 )
 
 
@@ -17,22 +18,6 @@ fn _centered_coefficient(value: UInt32, modulus_value: UInt32) -> Int:
     if centered_value > half_modulus:
         centered_value -= Int(modulus_value)
     return centered_value
-
-
-fn _poly_add_modulus(
-    left_values: List[UInt32],
-    right_values: List[UInt32],
-    modulus_value: UInt32,
-) -> List[UInt32]:
-    var result_values = List[UInt32](length=len(left_values), fill=0)
-    for coefficient_index in range(len(left_values)):
-        var summed_value = (
-            left_values[coefficient_index] + right_values[coefficient_index]
-        )
-        if summed_value >= modulus_value:
-            summed_value -= modulus_value
-        result_values[coefficient_index] = summed_value
-    return result_values^
 
 
 fn _poly_equal(left_values: List[UInt32], right_values: List[UInt32]) -> Bool:
